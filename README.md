@@ -27,9 +27,13 @@ app/                         Expo Router screens and navigation
 src/theme/                   Shared visual tokens
 docs/system-design.md        Architecture, time model, notification strategy
 docs/mvp/e2e-spec.md         MVP behavior, data contract, and acceptance tests
+docs/mvp/architecture.md     Implementation boundaries and release checks
+docs/mvp/design.md           Selected visual direction and screen states
+docs/mvp/assets/            Selected Today reference image
+AGENTS.md                   Agent instructions for MVP delivery
 ```
 
-As implementation proceeds, add pure time logic under `src/domain`, use cases under `src/use-cases`, SQLite adapters under `src/storage`, and notification adapters under `src/reminders`. See the docs before adding behavior.
+As implementation proceeds, add pure time logic under `src/domain`, use cases under `src/use-cases`, SQLite adapters under `src/storage`, and notification adapters under `src/reminders`. Start with the [MVP document index](docs/mvp/README.md) and [agent guide](AGENTS.md) before adding behavior.
 
 ## Initial implementation order
 
