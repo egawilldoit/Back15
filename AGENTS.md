@@ -9,6 +9,8 @@ This repository is the Expo/React Native foundation for Back15 V0.1, a personal,
 3. [MVP architecture guide](docs/mvp/architecture.md): where to put code, operation boundaries, and integration order. It elaborates on the two documents above.
 4. [MVP design guide](docs/mvp/design.md) and its selected screenshot: intended visual direction and screen states. A mockup never overrides time or product rules.
 
+For the concrete execution order, task checklist, dependencies and evidence gates, follow [the implementation waves](docs/mvp/implementation-waves.md). The wave plan does not override the source documents above.
+
 If documents appear to disagree, use the E2E spec for behavior and acceptance, the system design for domain/data decisions, this guide for implementation conventions, and the design guide for visual treatment. Fix the conflict in documentation when touching the relevant area. Do not silently implement the screenshot's example labels as business rules.
 
 ## Stack and working commands

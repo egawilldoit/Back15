@@ -28,6 +28,7 @@ src/theme/                   Shared visual tokens
 docs/system-design.md        Architecture, time model, notification strategy
 docs/mvp/e2e-spec.md         MVP behavior, data contract, and acceptance tests
 docs/mvp/architecture.md     Implementation boundaries and release checks
+docs/mvp/implementation-waves.md  Full build waves, rules and evidence gates
 docs/mvp/design.md           Selected visual direction and screen states
 docs/mvp/assets/            Selected Today reference image
 AGENTS.md                   Agent instructions for MVP delivery
