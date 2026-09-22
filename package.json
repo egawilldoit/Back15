@@ -1,5 +1,6 @@
 {
   "name": "back15",
+  "packageManager": "pnpm@11.19.0",
   "main": "expo-router/entry",
   "version": "0.1.0",
   "dependencies": {

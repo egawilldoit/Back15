@@ -10,15 +10,15 @@ This repository currently contains the **Expo app foundation**, three navigable 
 
 ## Start locally
 
-Requirements: Node.js compatible with the Expo SDK in `package.json`, npm, and the Expo Go app on a phone or an Android emulator.
+Requirements: Node.js 24, pnpm 11.19.0, and the Expo Go app on a phone or an Android emulator. If pnpm is not installed, run `corepack enable` with a Node.js distribution that includes Corepack.
 
 ```bash
-npm ci
-npm run typecheck
-npm start
+pnpm install --frozen-lockfile
+pnpm run typecheck
+pnpm start
 ```
 
-Scan the displayed QR code with Expo Go. `npm run android` and `npm run ios` launch the corresponding platform when the local development environment supports it. For native notification behavior, test an installed development build on a physical phone; Expo Go alone is not the V0.1 acceptance gate.
+Scan the displayed QR code with Expo Go. `pnpm android` and `pnpm ios` launch the corresponding platform when the local development environment supports it. For native notification behavior, test an installed development build on a physical phone; Expo Go alone is not the V0.1 acceptance gate.
 
 ## Layout
 
