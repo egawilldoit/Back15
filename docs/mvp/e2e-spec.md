@@ -8,7 +8,7 @@
 
 **Implementation target:** React Native, Expo, TypeScript, Expo SQLite, Expo local notifications
 
-**Related design:** `15-Minute-Time-Tracker-System-Design.md`
+**Related design:** [System design](../system-design.md)
 
 This document is the implementation authority where it adds detail to the earlier system design. In particular, the entry action ID and integer revision below are required additions to that design's schema.
 

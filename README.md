@@ -26,7 +26,7 @@ Scan the displayed QR code with Expo Go. `pnpm android` and `pnpm ios` launch th
 app/                         Expo Router screens and navigation
 src/theme/                   Shared visual tokens
 docs/system-design.md        Architecture, time model, notification strategy
-docs/e2e-spec.md             MVP behavior, data contract, and acceptance tests
+docs/mvp/e2e-spec.md         MVP behavior, data contract, and acceptance tests
 ```
 
 As implementation proceeds, add pure time logic under `src/domain`, use cases under `src/use-cases`, SQLite adapters under `src/storage`, and notification adapters under `src/reminders`. See the docs before adding behavior.
