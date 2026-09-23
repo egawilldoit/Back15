@@ -239,6 +239,10 @@ export default function NotificationTestScreen() {
         schedule.
       </AppText>
       <AppText variant="secondary">
+        If arrivals are late: Android Settings → Apps → Back15 → Alarms &amp; reminders,
+        and remove Back15 from Samsung's sleeping-apps and battery restrictions.
+      </AppText>
+      <AppText variant="secondary">
         Force-stopping the app or restricting battery usage cancels or delays reminders
         until the app is opened again.
       </AppText>
