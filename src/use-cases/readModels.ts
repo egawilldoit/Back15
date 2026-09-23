@@ -6,7 +6,7 @@ import type { Result } from '../domain/tracking/errors';
 import { checkInTarget, logNowTarget } from '../domain/tracking/proposals';
 import { summarizeDay } from '../domain/tracking/summary';
 import type { DaySummary, Entry, HistoryDay, PromptTarget, Session } from '../domain/tracking/types';
-import { getEntryById, listLiveEntriesForSession } from '../storage/repositories/entries';
+import { getEntryById, listLiveEntriesOverlapping } from '../storage/repositories/entries';
 import { getRemindersEnabled } from '../storage/repositories/settings';
 import { listAllSessions, listSessionsOverlapping } from '../storage/repositories/sessions';
 import type { UseCaseDeps } from './deps';
@@ -18,15 +18,20 @@ function toTrackingError(error: unknown): TrackingError {
   });
 }
 
+/**
+ * One query per read model: entries overlapping the window, filtered to the
+ * sessions being summarized. Anything outside the window is clipped away by
+ * summarizeDay anyway.
+ */
 async function entriesForSessions(
   deps: UseCaseDeps,
   sessions: readonly Session[],
+  window: TimeRange,
 ): Promise<Entry[]> {
-  const entries: Entry[] = [];
-  for (const session of sessions) {
-    entries.push(...(await listLiveEntriesForSession(deps.db, session.id)));
-  }
-  return entries;
+  if (sessions.length === 0) return [];
+  const sessionIds = new Set(sessions.map((session) => session.id));
+  const entries = await listLiveEntriesOverlapping(deps.db, window);
+  return entries.filter((entry) => sessionIds.has(entry.sessionId));
 }
 
 export interface TodayReadModel {
@@ -53,7 +58,7 @@ export async function getToday(
     const dayKey = localDayKey(now, input.timezone);
     const window = localDayWindow(dayKey, input.timezone);
     const sessions = await listSessionsOverlapping(deps.db, window);
-    const entries = await entriesForSessions(deps, sessions);
+    const entries = await entriesForSessions(deps, sessions, window);
     const activeSession = sessions.find((session) => session.status === 'active') ?? null;
     const activeEntries = activeSession
       ? entries.filter((entry) => entry.sessionId === activeSession.id)
@@ -98,7 +103,7 @@ export async function getDayDetail(
     const now = deps.now();
     const window = localDayWindow(input.dayKey, input.timezone);
     const sessions = await listSessionsOverlapping(deps.db, window);
-    const entries = await entriesForSessions(deps, sessions);
+    const entries = await entriesForSessions(deps, sessions, window);
     return {
       ok: true,
       value: {
@@ -153,11 +158,25 @@ export async function getHistory(
       }
     }
     const days = [...byDay.keys()].sort().reverse().slice(0, limit);
+    const dayWindows = days.map((dayKey) => ({
+      dayKey,
+      window: localDayWindow(dayKey, input.timezone),
+    }));
+    const range: TimeRange | null =
+      dayWindows.length === 0
+        ? null
+        : {
+            startAt: Math.min(...dayWindows.map((day) => day.window.startAt)),
+            endAt: Math.max(...dayWindows.map((day) => day.window.endAt)),
+          };
+    const allEntries = range
+      ? await listLiveEntriesOverlapping(deps.db, range)
+      : [];
     const result: HistoryDay[] = [];
-    for (const dayKey of days) {
+    for (const { dayKey, window } of dayWindows) {
       const daySessions = byDay.get(dayKey) ?? [];
-      const window = localDayWindow(dayKey, input.timezone);
-      const entries = await entriesForSessions(deps, daySessions);
+      const sessionIds = new Set(daySessions.map((session) => session.id));
+      const entries = allEntries.filter((entry) => sessionIds.has(entry.sessionId));
       const summary = summarizeDay(dayKey, window, daySessions, entries, now);
       if (summary.elapsedMs <= 0) continue;
       result.push({

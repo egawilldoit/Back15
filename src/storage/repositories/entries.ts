@@ -3,7 +3,7 @@ import type { Entry } from '../../domain/tracking/types';
 import { entryFromRow } from '../rows';
 import type { EntryRow, SqlExecutor } from '../types';
 
-const ENTRY_COLUMNS = `id, session_id, start_at, end_at, kind, description, category,
+export const ENTRY_COLUMNS = `id, session_id, start_at, end_at, kind, description, category,
   origin, client_action_id, revision, created_at, updated_at, deleted_at`;
 
 export async function listEntriesForSession(

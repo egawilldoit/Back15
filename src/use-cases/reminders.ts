@@ -134,6 +134,9 @@ export async function reconcileReminders(
   }
 
   const stored = await listReminderRequests(deps.db);
+  const storedNativeIds = new Map<string, string | null>(
+    stored.map((record) => [keyOf(record.sessionId, record.dueAt), record.nativeRequestId]),
+  );
   for (const record of stored) {
     const key = keyOf(record.sessionId, record.dueAt);
     if (!keptByKey.has(key)) {
@@ -144,13 +147,15 @@ export async function reconcileReminders(
     for (const dueAt of desired) {
       const key = keyOf(active.id, dueAt);
       const nativeId = keptByKey.get(key);
-      if (nativeId !== undefined) {
-        await upsertReminderRequest(deps.db, {
-          sessionId: active.id,
-          dueAt,
-          nativeRequestId: nativeId,
-        });
-      }
+      if (nativeId === undefined) continue;
+      // Crash recovery relies on comparing with the OS state, not on rewriting
+      // identical rows every reconcile.
+      if (storedNativeIds.get(key) === nativeId) continue;
+      await upsertReminderRequest(deps.db, {
+        sessionId: active.id,
+        dueAt,
+        nativeRequestId: nativeId,
+      });
     }
   } else {
     const stale = await listReminderRequests(deps.db);

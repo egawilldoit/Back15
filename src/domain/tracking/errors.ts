@@ -17,6 +17,10 @@ export type TrackingErrorCode =
   | 'SESSION_END_BEFORE_ENTRY'
   | 'SESSION_END_IN_FUTURE'
   | 'CLOCK_ANOMALY'
+  | 'BACKUP_INVALID'
+  | 'BACKUP_VERSION_UNSUPPORTED'
+  | 'BACKUP_CONFLICT'
+  | 'BACKUP_IMPORT_FAILED'
   | 'NATIVE_REMINDER_FAILURE';
 
 export interface TrackingErrorDetails {

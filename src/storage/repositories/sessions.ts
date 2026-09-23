@@ -3,7 +3,7 @@ import type { Session } from '../../domain/tracking/types';
 import { sessionFromRow } from '../rows';
 import type { SessionRow, SqlExecutor } from '../types';
 
-const SESSION_COLUMNS = `id, started_at, ended_at, reminder_window_end_at,
+export const SESSION_COLUMNS = `id, started_at, ended_at, reminder_window_end_at,
   interval_seconds, start_timezone, status, created_at, updated_at`;
 
 export async function getActiveSession(db: SqlExecutor): Promise<Session | null> {

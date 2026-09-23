@@ -45,7 +45,9 @@ export async function reconcile(
       }
       session = active;
     });
-    await setLastObservedWallAt(deps.db, now);
+    if (previousObservedAt !== now) {
+      await setLastObservedWallAt(deps.db, now);
+    }
     const reminder = await reconcileReminders(deps, { session, now });
     return { ok: true, value: { activeSession: session, closedExpired, clockAnomaly, reminder } };
   } catch (error) {

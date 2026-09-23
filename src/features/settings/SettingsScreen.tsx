@@ -1,11 +1,19 @@
 import Constants from 'expo-constants';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useState } from 'react';
-import { Linking, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Switch, View } from 'react-native';
 import { AppText } from '../../components/AppText';
 import { SecondaryButton } from '../../components/Buttons';
 import { Banner, Card, Screen, SectionTitle } from '../../components/Layout';
+import { parseJournalBackup } from '../../domain/journal/backup';
+import { localDayKey } from '../../domain/time/day';
 import { getRemindersEnabled, setRemindersEnabled } from '../../storage/repositories/settings';
+import { SCHEMA_VERSION } from '../../storage/sql';
+import { exportJournal, importJournal } from '../../use-cases/backup';
+import type { ImportMode } from '../../use-cases/backup';
 import { useApp } from '../app/AppProvider';
 import { palette, spacing } from '../../theme';
 
@@ -18,9 +26,111 @@ const PERMISSION_COPY: Record<string, string> = {
 
 export function SettingsScreen() {
   const router = useRouter();
-  const { deps, revision, reconcileNow, reminderStatus, refresh, requestReminderPermission } =
-    useApp();
+  const {
+    deps,
+    timezone,
+    revision,
+    reconcileNow,
+    reminderStatus,
+    refresh,
+    requestReminderPermission,
+  } = useApp();
   const [enabled, setEnabled] = useState(true);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupMessage, setBackupMessage] = useState<string | null>(null);
+
+  const runImport = useCallback(
+    async (text: string, mode: ImportMode) => {
+      setBackupBusy(true);
+      try {
+        const result = await importJournal(deps, { text, mode });
+        if (!result.ok) {
+          Alert.alert('Restore failed', result.error.message);
+          return;
+        }
+        await reconcileNow();
+        refresh();
+        setBackupMessage(
+          `${result.value.sessions} sessions and ${result.value.entries} entries restored (${result.value.tombstones} deleted). Reminders were rebuilt from the restored data.`,
+        );
+      } finally {
+        setBackupBusy(false);
+      }
+    },
+    [deps, reconcileNow, refresh],
+  );
+
+  const handleExport = useCallback(async () => {
+    setBackupBusy(true);
+    try {
+      const result = await exportJournal(deps, {
+        appVersion: Constants.expoConfig?.version ?? null,
+      });
+      if (!result.ok) {
+        Alert.alert('Export failed', result.error.message);
+        return;
+      }
+      const directory = FileSystem.cacheDirectory;
+      if (!directory) {
+        Alert.alert('Export failed', 'This device has no writable cache directory.');
+        return;
+      }
+      const uri = `${directory}back15-journal-${localDayKey(Date.now(), timezone)}.json`;
+      await FileSystem.writeAsStringAsync(uri, result.value.json, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Save Back15 journal',
+        });
+        setBackupMessage('Journal exported. Save the file somewhere outside this phone app.');
+      } else {
+        setBackupMessage(`Journal written to ${uri}`);
+      }
+    } catch (error) {
+      Alert.alert(
+        'Export failed',
+        error instanceof Error ? error.message : 'The journal could not be exported.',
+      );
+    } finally {
+      setBackupBusy(false);
+    }
+  }, [deps, timezone]);
+
+  const handleRestore = useCallback(async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        copyToCacheDirectory: true,
+      });
+      if (picked.canceled || !picked.assets?.[0]) return;
+      const text = await FileSystem.readAsStringAsync(picked.assets[0].uri);
+      const parsed = parseJournalBackup(text, SCHEMA_VERSION);
+      if (!parsed.ok) {
+        Alert.alert('Not a valid backup', parsed.error.message);
+        return;
+      }
+      Alert.alert(
+        'Restore journal',
+        `This backup holds ${parsed.value.sessions.length} sessions and ${parsed.value.entries.length} entries.\n\nReplace deletes the journal on this phone first. Merge keeps existing rows and updates matching ids. Both run as one transaction.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Merge', onPress: () => void runImport(text, 'merge') },
+          {
+            text: 'Replace',
+            style: 'destructive',
+            onPress: () => void runImport(text, 'replace'),
+          },
+        ],
+      );
+    } catch (error) {
+      Alert.alert(
+        'Restore failed',
+        error instanceof Error ? error.message : 'That file could not be read.',
+      );
+    }
+  }, [runImport]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +224,39 @@ export function SettingsScreen() {
         <AppText variant="secondary">
           Prompts stop after 12 hours so the app cannot invent overnight time. If a
           session reaches the cap, it closes there and can be corrected afterwards.
+        </AppText>
+      </Card>
+
+      <SectionTitle>Backup & restore</SectionTitle>
+      <Card style={styles.card}>
+        <AppText variant="bodyStrong">Export or restore the journal</AppText>
+        <AppText variant="secondary">
+          A backup contains every session and entry, including skipped and deleted ones,
+          plus the reminder preference. It never contains notification IDs, device
+          observation metadata, or account tokens.
+        </AppText>
+        <AppText variant="secondary">
+          Restore validates the file before touching storage and runs as one transaction:
+          a malformed file, an overlap or a conflict leaves the current journal exactly as
+          it was. Reminders are rebuilt from the restored rows.
+        </AppText>
+        {backupMessage ? <AppText variant="secondary">{backupMessage}</AppText> : null}
+        <SecondaryButton
+          label={backupBusy ? 'Working…' : 'Export journal'}
+          disabled={backupBusy}
+          accessibilityHint="Writes a JSON backup and opens the share sheet"
+          onPress={() => void handleExport()}
+        />
+        <SecondaryButton
+          label="Restore from a backup file"
+          disabled={backupBusy}
+          accessibilityHint="Pick a backup file, then choose merge or replace"
+          onPress={() => void handleRestore()}
+        />
+        <AppText variant="secondary">
+          Limitation: the Back15 build already installed on this phone cannot export its
+          data until it receives an update that includes this screen. Only backups you
+          create from now on can be restored.
         </AppText>
       </Card>
 

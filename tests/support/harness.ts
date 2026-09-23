@@ -19,6 +19,7 @@ export interface Harness {
 export async function createHarness(options?: {
   now?: Millis;
   reminders?: ReminderPort | null;
+  idPrefix?: string;
 }): Promise<Harness> {
   const db: TestDatabase = createTestDatabase();
   await migrate(db);
@@ -30,7 +31,7 @@ export async function createHarness(options?: {
     now: () => currentNow,
     newId: () => {
       idCounter += 1;
-      return `id-${idCounter}`;
+      return `${options?.idPrefix ?? 'id'}-${idCounter}`;
     },
   });
   return {
