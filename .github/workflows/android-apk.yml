@@ -1,0 +1,168 @@
+name: Android APK
+
+# Manual runs are always possible; PRs against main build a private test APK.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Build standalone test APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CI: '1'
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPO_NO_TELEMETRY: '1'
+      NDK_VERSION: '27.1.12297006'
+      CMAKE_VERSION: '3.22.1'
+      COMPILE_SDK: '35'
+      BUILD_TOOLS: '35.0.0'
+      ABI: arm64-v8a
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Pin Node and pnpm
+        uses: pnpm/setup@c9883cc79df532ad1a7b81bf9ab944ceb090d65c # v2
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Pin JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install pinned Android SDK packages
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(command -v sdkmanager || echo "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager")"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install \
+            "platforms;android-${COMPILE_SDK}" \
+            "build-tools;${BUILD_TOOLS}" \
+            "ndk;${NDK_VERSION}" \
+            "cmake;${CMAKE_VERSION}" >/dev/null
+          if [ -n "${ANDROID_HOME:-}" ]; then
+            echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          elif [ -n "${ANDROID_SDK_ROOT:-}" ]; then
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          fi
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'app.json') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Tests
+        run: pnpm run test
+
+      - name: Generate Android project
+        run: pnpm exec expo prebuild --platform android --no-install
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/back15-test.keystore"
+          KEYSTORE_PASSWORD="$(openssl rand -hex 16)"
+          echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          keytool -genkeypair -v \
+            -keystore "$KEYSTORE" \
+            -storetype PKCS12 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEYSTORE_PASSWORD" \
+            -alias back15test \
+            -keyalg RSA -keysize 2048 -validity 3650 \
+            -dname "CN=Back15 private test, OU=Internal, O=Back15, C=US"
+          # Injection properties live in the generated (gitignored) android
+          # project only; the keystore is a throwaway private-test key.
+          {
+            echo "android.injected.signing.store.file=$KEYSTORE"
+            echo "android.injected.signing.store.password=$KEYSTORE_PASSWORD"
+            echo "android.injected.signing.key.alias=back15test"
+            echo "android.injected.signing.key.password=$KEYSTORE_PASSWORD"
+          } >> gradle.properties
+          ./gradlew :app:assembleRelease --no-daemon \
+            -PreactNativeArchitectures="${ABI}"
+
+      - name: Verify APK and record evidence
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          APK_DIR="android/app/build/outputs/apk/release"
+          if [ ! -d "$APK_DIR" ]; then
+            echo "::error::No APK output directory at $APK_DIR"
+            exit 1
+          fi
+          APK="$(find "$APK_DIR" -maxdepth 1 -name '*.apk' -type f | sort | head -n 1)"
+          if [ -z "$APK" ] || [ ! -f "$APK" ]; then
+            echo "::error::No APK produced in $APK_DIR"
+            exit 1
+          fi
+          SIZE="$(stat -c%s "$APK")"
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "::error::APK is unexpectedly small (${SIZE} bytes)"
+            exit 1
+          fi
+          unzip -l "$APK" > "$RUNNER_TEMP/apk-listing.txt"
+          grep -q 'classes.dex' "$RUNNER_TEMP/apk-listing.txt" || { echo "::error::APK has no classes.dex"; exit 1; }
+          grep -q 'assets/index.android.bundle' "$RUNNER_TEMP/apk-listing.txt" || { echo "::error::APK has no embedded JS bundle; it would need Metro"; exit 1; }
+          APKSIGNER="$(find "${ANDROID_HOME}" -path '*build-tools*' -name apksigner -type f | sort -V | tail -n 1)"
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "$APK" | tee artifacts/signing.txt
+          fi
+          SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          SHORT_SHA="${HEAD_SHA::12}"
+          FNAME="back15-${SHORT_SHA}-test.apk"
+          cp "$APK" "artifacts/$FNAME"
+          {
+            echo "commit_sha=$HEAD_SHA"
+            echo "apk_filename=$FNAME"
+            echo "source_path=$APK"
+            echo "size_bytes=$SIZE"
+            echo "sha256=$SHA256"
+            echo "abi=$ABI"
+            echo "signed=private-test keystore generated in CI (not committed)"
+          } > artifacts/apk-info.txt
+          {
+            echo "## Back15 test APK"
+            echo ""
+            echo "| field | value |"
+            echo "| --- | --- |"
+            echo "| commit | \`$HEAD_SHA\` |"
+            echo "| file | \`$FNAME\` |"
+            echo "| size | $SIZE bytes ($(( SIZE / 1024 / 1024 )) MiB) |"
+            echo "| sha256 | \`$SHA256\` |"
+            echo "| ABI | $ABI |"
+            echo "| standalone | yes — JS bundle embedded, no Metro needed |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/apk-info.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: back15-test-apk-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/*
+          retention-days: 30
+          if-no-files-found: error
