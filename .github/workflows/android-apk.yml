@@ -111,11 +111,15 @@ jobs:
         run: |
           set -euo pipefail
           missing=""
-          for name in BACK15_KEYSTORE_BASE64 BACK15_KEYSTORE_PASSWORD BACK15_KEY_ALIAS BACK15_KEY_PASSWORD; do
-            if [ -z "$(printenv "$name" || true)" ]; then
-              missing="$missing $name"
+          check_secret() {
+            if [ -z "$2" ]; then
+              missing="$missing $1"
             fi
-          done
+          }
+          check_secret BACK15_KEYSTORE_BASE64 "$KEYSTORE_BASE64"
+          check_secret BACK15_KEYSTORE_PASSWORD "$KEYSTORE_PASSWORD"
+          check_secret BACK15_KEY_ALIAS "$KEY_ALIAS"
+          check_secret BACK15_KEY_PASSWORD "$KEY_PASSWORD"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing. Create the durable private-test keystore and add these secrets (see docs/mvp/test-signing.md). The job will not generate a throwaway key, because that would break future in-place updates."
             exit 1
