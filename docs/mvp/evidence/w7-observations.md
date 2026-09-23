@@ -6,7 +6,7 @@ target phone.
 
 ## A. Two full working days of reminder observations
 
-Use the Reminder diagnostic only to confirm the adapter; the release claim comes
+Use the Notification test screen only to confirm the adapter; the release claim comes
 from real sessions. For every planned check-in log:
 
 | Date | Session start | Planned due (UTC/local) | Alert observed | Lateness | State (locked/background/terminated) | Tapped? | Capture range saved | Outcome |

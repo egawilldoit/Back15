@@ -37,10 +37,18 @@ the moment a build host and the Samsung are available.
   `back15` scheme, and the `expo-notifications` / `expo-sqlite` plugins. No
   Android permission was added beyond what the plugins provide; no exact-alarm
   permission was requested.
-- W0.3 diagnostic path: an isolated **Reminder diagnostic** screen
-  (`app/diagnostic.tsx`, reachable from Settings) schedules one-shot local
-  notifications, lists native request IDs with intended `due_at` UTC, and
-  reports presented notifications. It writes no sessions or entries.
+- W0.3 diagnostic path: an isolated **Notification test** screen
+  (`app/diagnostic.tsx`, reachable from Settings → Reminders and from the
+  Today reminder banner) schedules immediate/10s/1min/15min local
+  notifications, lists pending request IDs with intended `due_at`, and records
+  every received/tapped event with its observed lateness. Its payloads are
+  marked `diagnostic` so the reminder reconciler ignores them; it writes no
+  sessions or entries.
+- W0.4 alarm capability: `app.json` declares `SCHEDULE_EXACT_ALARM`, so Android
+  12+ can use exact alarms when the OS grants it. When it is not granted,
+  `expo-notifications` falls back to `setAndAllowWhileIdle`, which batches
+  delivery (see `ExpoSchedulingDelegate.setupAlarm`). Lateness is expected and
+  must be measured, never assumed.
 - W0.4 strategy: the adapter (`src/reminders/expoReminders.ts`) implements the
   finite one-shot `DATE` schedule bounded to the session's 12-hour window
   (≤48 requests), with payloads `{version, sessionId, dueAt}` and no private
@@ -50,14 +58,15 @@ the moment a build host and the Samsung are available.
 ## Probe procedure to run on a device (not yet performed)
 
 1. Install the candidate build; run without internet.
-2. Open Settings → **Reminder diagnostic**; confirm permission and channel.
+2. Open Settings → **Notification test**; confirm permission and channel, then use
+   **Send now** and **In 10 seconds** to confirm the local path.
 3. Schedule in 1 minute; record `due_at` and the native request ID shown.
 4. Lock the phone; record the observed presentation time and lateness.
 5. Tap the alert from locked and from terminated state; confirm the app opens
    the current capture target (not the payload's stale time).
 6. Repeat with the app backgrounded and after a reboot.
-7. Schedule several requests, then **Cancel diagnostic requests**; confirm
-   `Pending requests: 0` and that nothing arrives.
+7. Schedule several requests, then **Cancel test notifications**; confirm the
+   pending list is empty and that nothing arrives.
 8. Record for the report: candidate SHA, build type, app version, device model,
    Android version, permission/channel, battery setting, `session_id`,
    `due_at` UTC, request ID, `presented_at`, `tapped_at`, `saved_at`, and the

@@ -18,7 +18,8 @@ const PERMISSION_COPY: Record<string, string> = {
 
 export function SettingsScreen() {
   const router = useRouter();
-  const { deps, revision, reconcileNow, reminderStatus, refresh } = useApp();
+  const { deps, revision, reconcileNow, reminderStatus, refresh, requestReminderPermission } =
+    useApp();
   const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
@@ -76,8 +77,18 @@ export function SettingsScreen() {
         ) : null}
         {permission !== 'granted' ? (
           <SecondaryButton
-            label="Open device settings"
-            onPress={() => void Linking.openSettings()}
+            label={permission === 'undetermined' ? 'Enable reminders' : 'Open device settings'}
+            onPress={() => {
+              if (permission === 'undetermined') {
+                void (async () => {
+                  await requestReminderPermission();
+                  await reconcileNow();
+                  refresh();
+                })();
+              } else {
+                void Linking.openSettings();
+              }
+            }}
           />
         ) : (
           <AppText variant="secondary">
@@ -85,6 +96,11 @@ export function SettingsScreen() {
             {(reminderStatus?.pendingCount ?? 0) === 1 ? 'prompt' : 'prompts'} scheduled.
           </AppText>
         )}
+        <SecondaryButton
+          label="Notification test"
+          accessibilityHint="Sends a test notification and records planned versus observed times"
+          onPress={() => router.push('/diagnostic')}
+        />
       </Card>
 
       <SectionTitle>Cadence</SectionTitle>

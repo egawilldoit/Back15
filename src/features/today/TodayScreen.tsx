@@ -136,6 +136,17 @@ export function TodayScreen() {
     timezone,
   ]);
 
+  const enableReminders = useCallback(async () => {
+    const result = await requestReminderPermission();
+    await reconcileNow();
+    if (result !== 'granted') {
+      Alert.alert(
+        'Reminders stay off',
+        'Android did not grant notification permission. You can still log every span manually, or allow notifications from device settings.',
+      );
+    }
+  }, [reconcileNow, requestReminderPermission]);
+
   const handleEntry = useCallback(
     (entry: Entry) => {
       router.push(`/edit/${entry.id}`);
@@ -185,10 +196,12 @@ export function TodayScreen() {
   }
 
   const summary = model.summary;
-  const remindersUnavailable =
+  const permission = reminderStatus?.permission ?? 'undetermined';
+  const remindersNeedAttention =
     reminderStatus?.error != null ||
-    reminderStatus?.permission === 'denied' ||
-    reminderStatus?.permission === 'unavailable';
+    permission === 'denied' ||
+    permission === 'unavailable' ||
+    (active !== null && permission === 'undetermined');
   const zoneChanged = active && active.startTimezone !== timezone;
   const checkIn = model.checkInTarget;
   const intervalMs = active ? active.intervalSeconds * 1000 : 0;
@@ -331,17 +344,36 @@ export function TodayScreen() {
           </Banner>
         ) : null}
 
-        {remindersUnavailable ? (
+        {remindersNeedAttention ? (
           <Banner tone="attention" title="Tracking without reminders">
             <AppText variant="secondary">
-              {reminderStatus?.permission === 'unavailable'
+              {permission === 'unavailable'
                 ? 'This build has no reminder support. Log now and history still work.'
-                : 'Notification permission is off. You can still log every span manually.'}
+                : permission === 'undetermined'
+                  ? 'Notifications are not allowed yet, so no check-in reminder can arrive.'
+                  : 'Notification permission is off. You can still log every span manually.'}
             </AppText>
-            <QuietButton
-              label="Open device settings"
-              onPress={() => void Linking.openSettings()}
-            />
+            {reminderStatus?.error ? (
+              <AppText variant="secondary">{reminderStatus.error}</AppText>
+            ) : null}
+            <View style={styles.bannerActions}>
+              {permission === 'undetermined' ? (
+                <QuietButton
+                  label="Enable reminders"
+                  onPress={() => void enableReminders()}
+                />
+              ) : null}
+              {permission === 'denied' || permission === 'unavailable' ? (
+                <QuietButton
+                  label="Open device settings"
+                  onPress={() => void Linking.openSettings()}
+                />
+              ) : null}
+              <QuietButton
+                label="Notification test"
+                onPress={() => router.push('/diagnostic')}
+              />
+            </View>
           </Banner>
         ) : null}
 
@@ -513,5 +545,11 @@ const styles = StyleSheet.create({
   notesMeta: {
     flexShrink: 1,
     textAlign: 'right',
+  },
+  bannerActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
 });

@@ -114,6 +114,17 @@ describe('reminder reconciliation', () => {
     expect(restored.value.reminder.scheduled).toBe(48);
   });
 
+  it('schedules nothing while permission is undetermined', async () => {
+    reminders.permission = 'undetermined';
+    const started = await startSession(harness.deps, { timezone: 'UTC' });
+    expect(started.ok).toBe(true);
+    expect(reminders.scheduled).toHaveLength(0);
+    expect(reminders.pending.size).toBe(0);
+    if (!started.ok) return;
+    expect(started.value.reminder.permission).toBe('undetermined');
+    expect(started.value.reminder.scheduled).toBe(0);
+  });
+
   it('cancels pending requests when reminders are switched off', async () => {
     await startSession(harness.deps, { timezone: 'UTC' });
     await setRemindersEnabled(harness.db, false);

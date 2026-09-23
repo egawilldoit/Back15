@@ -7,6 +7,7 @@ import type {
   ReminderPermission,
   ReminderPort,
 } from './types';
+import { permissionFromStatus } from './permission';
 import { parseReminderPayload } from './types';
 
 export const CHECK_IN_CHANNEL_ID = 'check-ins';
@@ -26,14 +27,6 @@ export function configureNotificationHandler(): void {
   });
 }
 
-function toPermission(
-  status: Notifications.NotificationPermissionsStatus,
-): ReminderPermission {
-  if (status.granted) return 'granted';
-  if (status.canAskAgain) return 'undetermined';
-  return 'denied';
-}
-
 function mapNotification(notification: Notifications.Notification): PendingReminder | null {
   const payload = parseReminderPayload(notification.request.content.data);
   if (!payload) return null;
@@ -43,11 +36,11 @@ function mapNotification(notification: Notifications.Notification): PendingRemin
 export function createExpoReminderPort(): ReminderPort {
   return {
     async getPermission() {
-      return toPermission(await Notifications.getPermissionsAsync());
+      return permissionFromStatus(await Notifications.getPermissionsAsync());
     },
     async requestPermission() {
       await this.ensureChannel();
-      return toPermission(await Notifications.requestPermissionsAsync());
+      return permissionFromStatus(await Notifications.requestPermissionsAsync());
     },
     async ensureChannel() {
       if (Platform.OS !== 'android') return;

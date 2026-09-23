@@ -29,7 +29,7 @@ export default function RootLayout() {
           options={{ presentation: 'modal', title: 'Edit entry' }}
         />
         <Stack.Screen name="day/[dayKey]" options={{ title: 'Day detail' }} />
-        <Stack.Screen name="diagnostic" options={{ title: 'Reminder diagnostic' }} />
+        <Stack.Screen name="diagnostic" options={{ title: 'Notification test' }} />
       </Stack>
     </AppProvider>
   );
