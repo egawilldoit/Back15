@@ -94,11 +94,13 @@ export type TimelineItem =
   | {
       type: 'entry';
       entry: Entry;
+      sessionId: string;
       range: TimeRange;
       clippedRange: TimeRange;
     }
   | {
       type: 'unresolved';
+      sessionId: string;
       range: TimeRange;
       clippedRange: TimeRange;
       /** Unresolved time after the latest completed boundary of an active session. */

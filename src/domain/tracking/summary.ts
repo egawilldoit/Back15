@@ -107,6 +107,7 @@ export function buildTimeline(
       items.push({
         type: 'entry',
         entry,
+        sessionId: session.id,
         range: { startAt: entry.startAt, endAt: entry.endAt },
         clippedRange: entryClipped,
       });
@@ -120,6 +121,7 @@ export function buildTimeline(
       if (crossesCutoff) {
         items.push({
           type: 'unresolved',
+          sessionId: session.id,
           range: { startAt: componentClipped.startAt, endAt: cutoff },
           clippedRange: { startAt: componentClipped.startAt, endAt: cutoff },
           current: false,
@@ -127,6 +129,7 @@ export function buildTimeline(
         });
         items.push({
           type: 'unresolved',
+          sessionId: session.id,
           range: { startAt: cutoff, endAt: componentClipped.endAt },
           clippedRange: { startAt: cutoff, endAt: componentClipped.endAt },
           current: true,
@@ -136,6 +139,7 @@ export function buildTimeline(
         const isCurrent = componentClipped.startAt >= cutoff && session.status === 'active';
         items.push({
           type: 'unresolved',
+          sessionId: session.id,
           range: componentClipped,
           clippedRange: componentClipped,
           current: isCurrent,

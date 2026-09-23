@@ -66,4 +66,5 @@ CREATE TABLE app_settings (
 export const SETTING_KEYS = {
   remindersEnabled: 'reminders_enabled',
   lastObservedWallAt: 'last_observed_wall_at',
+  permissionExplainerShown: 'permission_explainer_shown',
 } as const;
