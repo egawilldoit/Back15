@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   apk:
     name: Build standalone test APK
@@ -23,6 +27,10 @@ jobs:
       COMPILE_SDK: '35'
       BUILD_TOOLS: '35.0.0'
       ABI: arm64-v8a
+      # The test APK uses its own application id so it can be installed next to
+      # an already installed Back15 signed with a different key.
+      TEST_APPLICATION_ID: com.egawilldoit.back15.test
+      TEST_APP_NAME: Back15 Test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,7 +57,9 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           "$SDKMANAGER" --install \
             "platforms;android-${COMPILE_SDK}" \
+            "platforms;android-36" \
             "build-tools;${BUILD_TOOLS}" \
+            "build-tools;36.0.0" \
             "ndk;${NDK_VERSION}" \
             "cmake;${CMAKE_VERSION}" >/dev/null
           if [ -n "${ANDROID_HOME:-}" ]; then
@@ -77,64 +87,61 @@ jobs:
       - name: Tests
         run: pnpm run test
 
+      - name: Apply the test application identity
+        run: |
+          set -euo pipefail
+          node -e "
+            const fs = require('fs');
+            const config = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            config.expo.name = process.env.TEST_APP_NAME;
+            config.expo.android.package = process.env.TEST_APPLICATION_ID;
+            fs.writeFileSync('app.json', JSON.stringify(config, null, 2) + '\n');
+          "
+          grep -n '"package"' app.json
+
       - name: Generate Android project
         run: pnpm exec expo prebuild --platform android --no-install
 
-      - name: Probe native toolchain
-        working-directory: android
+      - name: Prepare durable test signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.BACK15_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.BACK15_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.BACK15_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.BACK15_KEY_PASSWORD }}
         run: |
-          set +e
-          echo "node=$(command -v node) $(node --version)"
-          echo "node_modules=$(ls -ld ../node_modules | head -1)"
-          echo "--- require.resolve react-native from android/"
-          node --print "require.resolve('react-native/package.json')"
-          echo "resolve_exit=$?"
-          for module in react-native-reanimated react-native-worklets; do
-            real="$(node -e "console.log(require('fs').realpathSync('../node_modules/' + process.argv[1] + '/android'))" "$module")"
-            echo "--- $module real android dir: $real"
-            (cd "$real" && node --print "require.resolve('react-native/package.json')")
-            echo "${module}_from_real_exit=$?"
+          set -euo pipefail
+          missing=""
+          for name in BACK15_KEYSTORE_BASE64 BACK15_KEYSTORE_PASSWORD BACK15_KEY_ALIAS BACK15_KEY_PASSWORD; do
+            if [ -z "$(printenv "$name" || true)" ]; then
+              missing="$missing $name"
+            fi
           done
-          echo "--- reanimated validate-react-native-version"
-          node ../node_modules/react-native-reanimated/scripts/validate-react-native-version.js 0.86.3
-          echo "rn_validate_exit=$?"
-          echo "--- reanimated validate-worklets-build"
-          node ../node_modules/react-native-reanimated/scripts/validate-worklets-build.js
-          echo "worklets_build_exit=$?"
-          echo "--- inline modules property"
-          grep -n "inlineModules" gradle.properties || echo "property missing"
-          echo "--- mirror-kotlin-inline-modules (as Gradle runs it)"
-          node --no-warnings --eval "require('expo/bin/autolinking')" expo-modules-autolinking mirror-kotlin-inline-modules \
-            --kotlin-files-mirror-directory "$GITHUB_WORKSPACE/android/expo/src/main/java/inline/modules" \
-            --inline-modules-list-directory "$GITHUB_WORKSPACE/android/expo/build/inline/modules" \
-            --watched-directories-serialized "$(grep -h '^expo.inlineModules.watchedDirectories=' gradle.properties | cut -d= -f2-)"
-          echo "mirror_exit=$?"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing. Create the durable private-test keystore and add these secrets (see docs/mvp/test-signing.md). The job will not generate a throwaway key, because that would break future in-place updates."
+            exit 1
+          fi
+          KEYSTORE="$RUNNER_TEMP/back15-test.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
+          if [ ! -s "$KEYSTORE" ]; then
+            echo "::error::BACK15_KEYSTORE_BASE64 did not decode to a keystore file."
+            exit 1
+          fi
+          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+          # The generated android project is gitignored; the keystore stays in
+          # the runner temp directory and is never uploaded.
+          {
+            echo ""
+            echo "android.injected.signing.store.file=$KEYSTORE"
+            echo "android.injected.signing.store.password=$KEYSTORE_PASSWORD"
+            echo "android.injected.signing.key.alias=$KEY_ALIAS"
+            echo "android.injected.signing.key.password=$KEY_PASSWORD"
+          } >> android/gradle.properties
 
       - name: Build release APK
         working-directory: android
         run: |
           set -euo pipefail
-          KEYSTORE="$RUNNER_TEMP/back15-test.keystore"
-          KEYSTORE_PASSWORD="$(openssl rand -hex 16)"
-          echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-          keytool -genkeypair -v \
-            -keystore "$KEYSTORE" \
-            -storetype PKCS12 \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -keypass "$KEYSTORE_PASSWORD" \
-            -alias back15test \
-            -keyalg RSA -keysize 2048 -validity 3650 \
-            -dname "CN=Back15 private test, OU=Internal, O=Back15, C=US"
-          # Injection properties live in the generated (gitignored) android
-          # project only; the keystore is a throwaway private-test key.
-          {
-            echo ""
-            echo "android.injected.signing.store.file=$KEYSTORE"
-            echo "android.injected.signing.store.password=$KEYSTORE_PASSWORD"
-            echo "android.injected.signing.key.alias=back15test"
-            echo "android.injected.signing.key.password=$KEYSTORE_PASSWORD"
-          } >> gradle.properties
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace --console=plain \
+          ./gradlew :app:assembleRelease --no-daemon --console=plain \
             -PreactNativeArchitectures="${ABI}"
 
       - name: Verify APK and record evidence
@@ -159,10 +166,33 @@ jobs:
           unzip -l "$APK" > "$RUNNER_TEMP/apk-listing.txt"
           grep -q 'classes.dex' "$RUNNER_TEMP/apk-listing.txt" || { echo "::error::APK has no classes.dex"; exit 1; }
           grep -q 'assets/index.android.bundle' "$RUNNER_TEMP/apk-listing.txt" || { echo "::error::APK has no embedded JS bundle; it would need Metro"; exit 1; }
+
           APKSIGNER="$(find "${ANDROID_HOME}" -path '*build-tools*' -name apksigner -type f | sort -V | tail -n 1)"
-          if [ -n "$APKSIGNER" ]; then
-            "$APKSIGNER" verify --print-certs "$APK" | tee artifacts/signing.txt
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found; refusing to report an unverified signature."
+            exit 1
           fi
+          "$APKSIGNER" verify --print-certs "$APK" | tee artifacts/signing.txt
+          CERT_SHA256="$(sed -n 's/^V2 Signer: certificate SHA-256 digest: //p' artifacts/signing.txt | head -n 1)"
+          CERT_SHA1="$(sed -n 's/^V2 Signer: certificate SHA-1 digest: //p' artifacts/signing.txt | head -n 1)"
+          if [ -z "$CERT_SHA256" ]; then
+            echo "::error::Could not read the signing certificate digest."
+            exit 1
+          fi
+
+          AAPT2="$(find "${ANDROID_HOME}" -path '*build-tools*' -name 'aapt2' -type f | sort -V | tail -n 1)"
+          PACKAGE_ID=""
+          if [ -n "$AAPT2" ]; then
+            PACKAGE_ID="$("$AAPT2" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
+          fi
+          if [ -z "$PACKAGE_ID" ]; then
+            PACKAGE_ID="$(unzip -p "$APK" AndroidManifest.xml | strings -e l | grep -oE 'com\.egawilldoit\.back15(\.test)?' | head -n 1)"
+          fi
+          if [ "$PACKAGE_ID" != "$TEST_APPLICATION_ID" ]; then
+            echo "::error::APK package id is '${PACKAGE_ID}', expected '${TEST_APPLICATION_ID}'."
+            exit 1
+          fi
+
           SHA256="$(sha256sum "$APK" | awk '{print $1}')"
           SHORT_SHA="${HEAD_SHA::12}"
           FNAME="back15-${SHORT_SHA}-test.apk"
@@ -170,11 +200,13 @@ jobs:
           {
             echo "commit_sha=$HEAD_SHA"
             echo "apk_filename=$FNAME"
-            echo "source_path=$APK"
+            echo "package_id=$PACKAGE_ID"
+            echo "signing_cert_sha256=$CERT_SHA256"
+            echo "signing_cert_sha1=$CERT_SHA1"
             echo "size_bytes=$SIZE"
             echo "sha256=$SHA256"
             echo "abi=$ABI"
-            echo "signed=private-test keystore generated in CI (not committed)"
+            echo "signed=durable private-test keystore from repository secrets (never committed)"
           } > artifacts/apk-info.txt
           {
             echo "## Back15 test APK"
@@ -182,9 +214,11 @@ jobs:
             echo "| field | value |"
             echo "| --- | --- |"
             echo "| commit | \`$HEAD_SHA\` |"
+            echo "| package id | \`$PACKAGE_ID\` |"
             echo "| file | \`$FNAME\` |"
             echo "| size | $SIZE bytes ($(( SIZE / 1024 / 1024 )) MiB) |"
-            echo "| sha256 | \`$SHA256\` |"
+            echo "| apk sha256 | \`$SHA256\` |"
+            echo "| signing cert sha256 | \`$CERT_SHA256\` |"
             echo "| ABI | $ABI |"
             echo "| standalone | yes — JS bundle embedded, no Metro needed |"
           } >> "$GITHUB_STEP_SUMMARY"
