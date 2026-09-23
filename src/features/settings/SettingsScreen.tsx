@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, StyleSheet, Switch, View } from 'react-native';
 import { AppText } from '../../components/AppText';
@@ -16,6 +17,7 @@ const PERMISSION_COPY: Record<string, string> = {
 };
 
 export function SettingsScreen() {
+  const router = useRouter();
   const { deps, revision, reconcileNow, reminderStatus, refresh } = useApp();
   const [enabled, setEnabled] = useState(true);
 
@@ -113,6 +115,11 @@ export function SettingsScreen() {
         <AppText variant="secondary">
           App version {Constants.expoConfig?.version ?? '0.1.0'}
         </AppText>
+        <SecondaryButton
+          label="Reminder diagnostic"
+          accessibilityHint="Opens the local notification probe used for device evidence"
+          onPress={() => router.push('/diagnostic')}
+        />
       </Card>
     </Screen>
   );

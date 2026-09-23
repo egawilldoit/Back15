@@ -17,3 +17,5 @@ jobs:
           install: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
+      - name: Tests (domain, storage, use cases, reminder adapter contract)
+        run: pnpm run test
