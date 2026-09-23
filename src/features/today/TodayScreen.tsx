@@ -34,7 +34,15 @@ function useTickMs(active: boolean): number {
 
 export function TodayScreen() {
   const router = useRouter();
-  const { deps, timezone, revision, refresh, reminderStatus, reconcileNow } = useApp();
+  const {
+    deps,
+    timezone,
+    revision,
+    refresh,
+    reminderStatus,
+    reconcileNow,
+    requestReminderPermission,
+  } = useApp();
   const [model, setModel] = useState<TodayReadModel | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -62,12 +70,17 @@ export function TodayScreen() {
   const handleStart = useCallback(async () => {
     setStarting(true);
     try {
-      const explained = (await getSetting(deps.db, SETTING_KEYS.permissionExplainerShown)) === 'true';
-      const begin = async () => {
+      const explained =
+        (await getSetting(deps.db, SETTING_KEYS.permissionExplainerShown)) === 'true';
+      const begin = async (allowPermissionRequest: boolean) => {
+        if (allowPermissionRequest) {
+          await requestReminderPermission();
+        }
         const result = await startSession(deps, { timezone });
         if (!result.ok) {
           Alert.alert('Could not start', result.error.message);
         }
+        await reconcileNow();
         refresh();
       };
       if (!explained) {
@@ -76,18 +89,28 @@ export function TodayScreen() {
           'Local check-in reminders',
           'Back15 asks for notification permission only to remind you during a tracking session. Reminders stay on this phone: there is no account, push service, or internet connection.',
           [
-            { text: 'Not now', style: 'cancel', onPress: () => void begin() },
-            { text: 'Continue', onPress: () => void begin() },
+            {
+              text: 'Not now',
+              style: 'cancel',
+              onPress: () => void begin(false),
+            },
+            { text: 'Continue', onPress: () => void begin(true) },
           ],
         );
       } else {
-        await begin();
+        await begin(reminderStatus?.permission !== 'denied');
       }
-      await reconcileNow();
     } finally {
       setStarting(false);
     }
-  }, [deps, refresh, reconcileNow, timezone]);
+  }, [
+    deps,
+    refresh,
+    reconcileNow,
+    reminderStatus?.permission,
+    requestReminderPermission,
+    timezone,
+  ]);
 
   const handleEntry = useCallback(
     (entry: Entry) => {

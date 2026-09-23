@@ -39,6 +39,7 @@ export interface ReminderStatus {
 export interface AppContextValue {
   deps: UseCaseDeps;
   timezone: string;
+  requestReminderPermission(): Promise<ReminderPermission>;
   revision: number;
   ready: boolean;
   storageError: string | null;
@@ -68,7 +69,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [reminderStatus, setReminderStatus] = useState<ReminderStatus | null>(null);
   const sheetCount = useRef(0);
   const reminders = useMemo(() => createExpoReminderPort(), []);
-  const timezone = useMemo(() => currentTimeZone(), []);
+  const [timezone, setTimezone] = useState(() => currentTimeZone());
 
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   const setSheetOpen = useCallback((open: boolean) => {
@@ -108,8 +109,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [db, reminders],
   );
 
+  const requestReminderPermission = useCallback(async (): Promise<ReminderPermission> => {
+    try {
+      return await reminders.requestPermission();
+    } catch {
+      return 'denied';
+    }
+  }, [reminders]);
+
   const reconcileNow = useCallback(async (): Promise<ReminderStatus | null> => {
     if (!deps) return null;
+    const zone = currentTimeZone();
+    if (zone !== timezone) {
+      setTimezone(zone);
+      refresh();
+    }
     const result = await reconcile(deps);
     if (!result.ok) {
       setReminderStatus((current) => ({
@@ -131,7 +145,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setReminderStatus(status);
     refresh();
     return status;
-  }, [deps, refresh]);
+  }, [deps, refresh, timezone]);
 
   useEffect(() => {
     if (!deps) return;
@@ -207,6 +221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return {
       deps,
       timezone,
+      requestReminderPermission,
       revision,
       ready: true,
       storageError,
@@ -219,6 +234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [
     deps,
     timezone,
+    requestReminderPermission,
     revision,
     storageError,
     reminderStatus,

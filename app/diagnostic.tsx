@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AppText } from '@/src/components/AppText';
 import { SecondaryButton, QuietButton } from '@/src/components/Buttons';
@@ -11,7 +11,7 @@ import { palette, spacing } from '@/src/theme';
  * schedules a one-shot local notification; it never writes sessions/entries.
  */
 export default function DiagnosticScreen() {
-  const port = createExpoReminderPort();
+  const port = useMemo(() => createExpoReminderPort(), []);
   const [permission, setPermission] = useState('unknown');
   const [pending, setPending] = useState<{ nativeId: string; dueAt: number }[]>([]);
   const [presented, setPresented] = useState(0);
