@@ -80,6 +80,28 @@ jobs:
       - name: Generate Android project
         run: pnpm exec expo prebuild --platform android --no-install
 
+      - name: Probe native toolchain
+        working-directory: android
+        run: |
+          set +e
+          echo "node=$(command -v node) $(node --version)"
+          echo "node_modules=$(ls -ld ../node_modules | head -1)"
+          echo "--- require.resolve react-native from android/"
+          node --print "require.resolve('react-native/package.json')"
+          echo "resolve_exit=$?"
+          for module in react-native-reanimated react-native-worklets; do
+            real="$(node -e "console.log(require('fs').realpathSync('../node_modules/' + process.argv[1] + '/android'))" "$module")"
+            echo "--- $module real android dir: $real"
+            (cd "$real" && node --print "require.resolve('react-native/package.json')")
+            echo "${module}_from_real_exit=$?"
+          done
+          echo "--- reanimated validate-react-native-version"
+          node ../node_modules/react-native-reanimated/scripts/validate-react-native-version.js 0.86.3
+          echo "rn_validate_exit=$?"
+          echo "--- reanimated validate-worklets-build"
+          node ../node_modules/react-native-reanimated/scripts/validate-worklets-build.js
+          echo "worklets_build_exit=$?"
+
       - name: Build release APK
         working-directory: android
         run: |
@@ -103,7 +125,7 @@ jobs:
             echo "android.injected.signing.key.alias=back15test"
             echo "android.injected.signing.key.password=$KEYSTORE_PASSWORD"
           } >> gradle.properties
-          ./gradlew :app:assembleRelease --no-daemon \
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace --console=plain \
             -PreactNativeArchitectures="${ABI}"
 
       - name: Verify APK and record evidence
