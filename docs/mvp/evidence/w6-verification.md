@@ -50,6 +50,12 @@ not pass the release gate.
 | Build | Commit | Package id | Signing cert SHA-256 | APK SHA-256 | Size |
 | --- | --- | --- | --- | --- | --- |
 | run 35903200493 | `222394d001f4` | `com.egawilldoit.back15.test` | `d3523429e41d9b8789459d3670dfc41a98df23d8c3e49554cf2e6dab8b508be1` | `85ec5815b0e11b9226bb145efdf50256719bca1d69453ada027e2596e6734b2d` | 44,034,643 B |
+| run 35904414576 | `cde55db8eea7` | `com.egawilldoit.back15.test` | `d3523429e41d9b8789459d3670dfc41a98df23d8c3e49554cf2e6dab8b508be1` (same key) | `9e4e114198c2c0515cf705824db017bcc56a3cd12d72f6b01798a06e3f72589d` | 44,034,647 B |
+
+Two consecutive builds reported the same signing certificate, so future test
+APKs can update each other in place. The downloaded artifact was re-hashed
+locally, and its manifest, `classes.dex` and embedded `assets/index.android.bundle`
+were verified.
 
 - The test build uses its own application id so it installs **alongside** any
   existing Back15 signed with a different key. It cannot read or migrate the
