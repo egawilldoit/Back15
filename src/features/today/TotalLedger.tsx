@@ -1,14 +1,13 @@
 import { StyleSheet, View } from 'react-native';
 import { AppText } from '../../components/AppText';
-import { formatDurationLabel } from '../../domain/time/day';
-import { palette, radii, spacing } from '../../theme';
+import { formatCompactDurationLabel } from '../../domain/time/day';
+import { palette, spacing } from '../../theme';
 
 export interface TotalLedgerProps {
   elapsedMs: number;
   recordedMs: number;
   skippedMs: number;
   unresolvedMs: number;
-  compact?: boolean;
 }
 
 function Column({
@@ -22,16 +21,18 @@ function Column({
 }) {
   return (
     <View style={styles.column}>
-      <AppText variant="numeric" color={color}>
+      <AppText variant="editorialSmall" color={color} numberOfLines={1} style={styles.value}>
         {value}
       </AppText>
-      <AppText variant="secondary">{label}</AppText>
+      <AppText variant="caps" numberOfLines={1} style={styles.label}>
+        {label}
+      </AppText>
     </View>
   );
 }
 
 /**
- * Compact ledger of honest totals. Totals are rounded only after summing
+ * Editorial ledger of honest totals. Totals are rounded once, after summing
  * (the caller passes exact milliseconds).
  */
 export function TotalLedger({
@@ -39,21 +40,20 @@ export function TotalLedger({
   recordedMs,
   skippedMs,
   unresolvedMs,
-  compact = false,
 }: TotalLedgerProps) {
   return (
-    <View style={[styles.ledger, compact && styles.ledgerCompact]}>
-      <Column label="Recorded" value={formatDurationLabel(recordedMs)} />
+    <View style={styles.ledger}>
+      <Column label="Recorded" value={formatCompactDurationLabel(recordedMs)} />
+      <View style={styles.divider} />
+      <Column label="Skipped" value={formatCompactDurationLabel(skippedMs)} />
       <View style={styles.divider} />
       <Column
         label="Unresolved"
-        value={formatDurationLabel(unresolvedMs)}
-        color={unresolvedMs > 0 ? palette.attention : palette.ink}
+        value={formatCompactDurationLabel(unresolvedMs)}
+        color={unresolvedMs > 0 ? palette.attention : undefined}
       />
       <View style={styles.divider} />
-      <Column label="Skipped" value={formatDurationLabel(skippedMs)} />
-      <View style={styles.divider} />
-      <Column label="Session" value={formatDurationLabel(elapsedMs)} />
+      <Column label="Session" value={formatCompactDurationLabel(elapsedMs)} />
     </View>
   );
 }
@@ -62,20 +62,23 @@ const styles = StyleSheet.create({
   ledger: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: palette.surface,
-    borderRadius: radii.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: palette.rule,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
-  },
-  ledgerCompact: {
     paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: palette.rule,
   },
   column: {
     flex: 1,
     alignItems: 'center',
     gap: 2,
+  },
+  value: {
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  label: {
+    fontSize: 10,
+    letterSpacing: 1.2,
   },
   divider: {
     width: StyleSheet.hairlineWidth,

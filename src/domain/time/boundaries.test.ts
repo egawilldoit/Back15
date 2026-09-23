@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeSession, utc } from '../../../tests/support/fixtures';
 import {
+  boundaryStripWindow,
   currentPartialInterval,
   detectClockAnomaly,
   effectiveEndMs,
@@ -91,6 +92,41 @@ describe('anchored boundaries', () => {
     expect(effectiveEndMs(session, START + 5 * 60 * 60 * 1000)).toBe(endedAt);
     expect(nextPlannedBoundary(session, START)).toBeNull();
     expect(futureBoundaries(session, START)).toEqual([]);
+  });
+});
+
+describe('boundary strip window', () => {
+  it('shows the recent completed boundaries and the next ones', () => {
+    const session = activeSession();
+    const window = boundaryStripWindow(session, utc(2026, 9, 22, 10, 28));
+    expect(window).not.toBeNull();
+    expect(window!.completed).toBe(5);
+    expect(window!.current).toBe(6);
+    expect(window!.items[0].n).toBe(1);
+    expect(window!.items[window!.items.length - 1].n).toBe(11);
+    expect(window!.items[0].at).toBe(utc(2026, 9, 22, 9, 18, 20));
+  });
+
+  it('marks the first boundary as current before any is completed', () => {
+    const session = activeSession();
+    const window = boundaryStripWindow(session, utc(2026, 9, 22, 9, 10));
+    expect(window!.completed).toBe(0);
+    expect(window!.current).toBe(1);
+  });
+
+  it('keeps the last boundary in view at the window end', () => {
+    const session = activeSession();
+    const window = boundaryStripWindow(session, START + REMINDER_WINDOW_MS);
+    expect(window!.completed).toBe(48);
+    expect(window!.items[window!.items.length - 1].n).toBe(48);
+    expect(window!.current).toBe(48);
+  });
+
+  it('returns nothing before the first boundary exists', () => {
+    const session = makeSession({ startedAt: START, intervalSeconds: 60 * 60 });
+    const window = boundaryStripWindow(session, START + 60_000);
+    expect(window!.items.length).toBeGreaterThan(0);
+    expect(boundaryStripWindow(makeSession({ startedAt: START, intervalSeconds: 13 * 60 * 60 }), START + 60_000)).toBeNull();
   });
 });
 

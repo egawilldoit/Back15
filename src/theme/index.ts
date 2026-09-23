@@ -89,6 +89,56 @@ export const typography = {
     lineHeight: 20,
     color: palette.ink,
   },
+  serifHeading: {
+    fontFamily: fontFamilies.display,
+    fontSize: 34,
+    lineHeight: 40,
+    color: palette.ink,
+  },
+  editorial: {
+    fontFamily: fontFamilies.display,
+    fontSize: 40,
+    lineHeight: 46,
+    color: palette.ink,
+  },
+  editorialSmall: {
+    fontFamily: fontFamilies.display,
+    fontSize: 26,
+    lineHeight: 30,
+    color: palette.ink,
+  },
+  caps: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase' as const,
+    color: palette.muted,
+  },
+  capsInk: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase' as const,
+    color: palette.ink,
+  },
+  capsAttention: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase' as const,
+    color: palette.attention,
+  },
+  capsOnAccent: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase' as const,
+    color: palette.onAccentMuted,
+  },
 } as const;
 
 export function formatCountdown(ms: number): string {

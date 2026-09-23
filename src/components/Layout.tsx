@@ -54,21 +54,32 @@ export function Banner({
 export function Screen({
   children,
   scroll = true,
+  topInset = true,
+  horizontalPadding = true,
   contentStyle,
 }: {
   children: ReactNode;
   scroll?: boolean;
+  /** Set false on screens that already render a navigation header. */
+  topInset?: boolean;
+  horizontalPadding?: boolean;
   contentStyle?: ViewStyle;
 }) {
   const insets = useSafeAreaInsets();
-  const padding = { paddingBottom: insets.bottom + spacing.xxl };
+  const padding = {
+    paddingTop: topInset ? insets.top + spacing.sm : 0,
+    paddingBottom: insets.bottom + spacing.xxl,
+  };
+  const horizontal = horizontalPadding ? { paddingHorizontal: spacing.lg } : null;
   if (!scroll) {
-    return <View style={[styles.screen, padding, contentStyle]}>{children}</View>;
+    return (
+      <View style={[styles.screen, padding, horizontal, contentStyle]}>{children}</View>
+    );
   }
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.scrollContent, padding, contentStyle]}
+      contentContainerStyle={[styles.scrollContent, horizontal, padding, contentStyle]}
       keyboardShouldPersistTaps="handled"
     >
       {children}
@@ -98,8 +109,6 @@ const styles = StyleSheet.create({
     backgroundColor: palette.background,
   },
   scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
     gap: spacing.md,
   },
   card: {

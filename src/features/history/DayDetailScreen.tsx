@@ -64,7 +64,7 @@ export function DayDetailScreen() {
 
   if (error) {
     return (
-      <Screen>
+      <Screen topInset={false}>
         <Banner tone="danger" title="Could not read this day">
           <AppText variant="secondary">{error}</AppText>
         </Banner>
@@ -74,7 +74,7 @@ export function DayDetailScreen() {
 
   if (!model) {
     return (
-      <Screen scroll={false}>
+      <Screen topInset={false} scroll={false}>
         <AppText variant="secondary">Loading…</AppText>
       </Screen>
     );
@@ -89,7 +89,7 @@ export function DayDetailScreen() {
   );
 
   return (
-    <Screen>
+    <Screen topInset={false}>
       <View style={styles.header}>
         <AppText variant="sectionTitle">Day detail</AppText>
         <AppText variant="display">{formatDayKeyLabel(model.dayKey, timezone)}</AppText>

@@ -3,7 +3,10 @@ import { utc } from '../../../tests/support/fixtures';
 import {
   addDaysToDayKey,
   formatClockTime,
+  formatCompactDurationLabel,
   formatDurationLabel,
+  formatFullDate,
+  formatWeekday,
   localDayKey,
   localDayWindow,
   localMidnightUtc,
@@ -101,6 +104,19 @@ describe('display formatting', () => {
     expect(formatDurationLabel(60 * 60_000)).toBe('1 h');
     expect(formatDurationLabel(65 * 60_000)).toBe('1 h 05 min');
     expect(formatDurationLabel(0)).toBe('0 min');
+  });
+
+  it('splits the weekday from the full date for the editorial heading', () => {
+    const instant = utc(2026, 9, 23, 10, 28);
+    expect(formatWeekday(instant, 'UTC')).toBe('Wednesday');
+    expect(formatFullDate(instant, 'UTC')).toBe('23 September 2026');
+  });
+
+  it('labels compact ledger durations', () => {
+    expect(formatCompactDurationLabel(45 * 60_000)).toBe('45m');
+    expect(formatCompactDurationLabel(60 * 60_000)).toBe('1h');
+    expect(formatCompactDurationLabel(65 * 60_000)).toBe('1h 05m');
+    expect(formatCompactDurationLabel(0)).toBe('0m');
   });
 
   it('returns local midnight for a day key', () => {

@@ -4,7 +4,7 @@ import { formatClockTime, formatDurationLabel } from '../../domain/time/day';
 import type { TimeRange } from '../../domain/time/types';
 import { CATEGORY_LABELS } from '../../domain/tracking/types';
 import type { Entry, TimelineItem } from '../../domain/tracking/types';
-import { palette, spacing, radii } from '../../theme';
+import { palette, radii, spacing } from '../../theme';
 
 export type UnresolvedItem = Extract<TimelineItem, { type: 'unresolved' }>;
 
@@ -15,12 +15,11 @@ export interface TimelineListProps {
   onPressUnresolved: (item: UnresolvedItem) => void;
 }
 
-function RangeLabel({ range, timezone }: { range: TimeRange; timezone: string }) {
-  return (
-    <AppText variant="numericSmall" color={palette.muted}>
-      {formatClockTime(range.startAt, timezone)}–{formatClockTime(range.endAt, timezone)}
-    </AppText>
-  );
+function rangeLabel(range: TimeRange, timezone: string): string {
+  return `${formatClockTime(range.startAt, timezone)}–${formatClockTime(
+    range.endAt,
+    timezone,
+  )}`;
 }
 
 export function TimelineList({
@@ -30,13 +29,12 @@ export function TimelineList({
   onPressUnresolved,
 }: TimelineListProps) {
   if (items.length === 0) {
-    return (
-      <AppText variant="secondary">No activity yet today.</AppText>
-    );
+    return <AppText variant="secondary">No check-ins yet today.</AppText>;
   }
   return (
-    <View style={styles.list}>
-      {items.map((item) => {
+    <View>
+      {items.map((item, index) => {
+        const last = index === items.length - 1;
         if (item.type === 'entry') {
           const { entry } = item;
           const title = entry.kind === 'skipped' ? 'Skipped' : entry.description ?? '';
@@ -48,88 +46,105 @@ export function TimelineList({
             <Pressable
               key={`entry-${entry.id}`}
               accessibilityRole="button"
-              accessibilityLabel={`${formatClockTime(
-                item.clippedRange.startAt,
-                timezone,
-              )} to ${formatClockTime(item.clippedRange.endAt, timezone)}, ${title}, ${meta}`}
+              accessibilityLabel={`${rangeLabel(item.clippedRange, timezone)}, ${title}, ${meta}`}
               accessibilityHint="Opens this entry for editing"
               onPress={() => onPressEntry(entry)}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.row,
+                last && styles.rowLast,
+                pressed && styles.pressed,
+              ]}
             >
-              <View style={styles.rangeColumn}>
-                <RangeLabel range={item.clippedRange} timezone={timezone} />
-              </View>
-              <View style={styles.markerColumn}>
-                <View
-                  style={[
-                    styles.dot,
-                    entry.kind === 'skipped' ? styles.dotSkipped : styles.dotRecorded,
-                  ]}
-                />
-              </View>
-              <View style={styles.bodyColumn}>
+              <AppText variant="numericSmall" color={palette.muted} style={styles.range}>
+                {rangeLabel(item.clippedRange, timezone)}
+              </AppText>
+              <View
+                style={[
+                  styles.dot,
+                  entry.kind === 'skipped' ? styles.dotSkipped : styles.dotRecorded,
+                ]}
+              />
+              <View style={styles.body}>
                 <AppText
-                  variant="body"
+                  variant="bodyStrong"
                   color={entry.kind === 'skipped' ? palette.muted : palette.ink}
                   numberOfLines={2}
                 >
                   {title}
                 </AppText>
-                <AppText variant="secondary">{meta}</AppText>
+                <AppText variant="secondary" numberOfLines={1}>
+                  {meta}
+                </AppText>
               </View>
               <AppText variant="numericSmall" color={palette.muted}>
-                {formatDurationLabel(
-                  item.clippedRange.endAt - item.clippedRange.startAt,
-                )}
+                {formatDurationLabel(item.clippedRange.endAt - item.clippedRange.startAt)}
               </AppText>
             </Pressable>
           );
         }
-        const isCurrent = item.current;
-        const label = isCurrent ? 'Current, unresolved' : 'Unresolved time';
+        if (item.current) {
+          return (
+            <Pressable
+              key={`current-${item.clippedRange.startAt}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${rangeLabel(
+                item.clippedRange,
+                timezone,
+              )}, in progress, log now`}
+              accessibilityHint="Records what you are doing right now"
+              onPress={() => onPressUnresolved(item)}
+              style={({ pressed }) => [
+                styles.row,
+                last && styles.rowLast,
+                pressed && styles.pressed,
+              ]}
+            >
+              <AppText variant="numericSmall" color={palette.muted} style={styles.range}>
+                {rangeLabel(item.clippedRange, timezone)}
+              </AppText>
+              <View style={[styles.dot, styles.dotCurrent]} />
+              <View style={styles.body}>
+                <AppText variant="bodyStrong">In progress</AppText>
+                <AppText variant="caps" color={palette.accent}>
+                  log now →
+                </AppText>
+              </View>
+              <AppText variant="numericSmall" color={palette.muted}>
+                {formatDurationLabel(item.clippedRange.endAt - item.clippedRange.startAt)}
+              </AppText>
+            </Pressable>
+          );
+        }
         return (
           <Pressable
-            key={`gap-${item.clippedRange.startAt}-${item.clippedRange.endAt}`}
+            key={`gap-${item.clippedRange.startAt}`}
             accessibilityRole="button"
-            accessibilityLabel={`${formatClockTime(
-              item.clippedRange.startAt,
+            accessibilityLabel={`${rangeLabel(
+              item.clippedRange,
               timezone,
-            )} to ${formatClockTime(item.clippedRange.endAt, timezone)}, ${label}, ${formatDurationLabel(
-              item.clippedRange.endAt - item.clippedRange.startAt,
-            )}`}
-            accessibilityHint={
-              isCurrent ? 'Opens Log now for this span' : 'Opens capture for this unresolved span'
-            }
+            )}, unresolved, needs an answer`}
+            accessibilityHint="Records what you did during this unresolved span"
             onPress={() => onPressUnresolved(item)}
-            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.gapCard,
+              last && styles.rowLast,
+              pressed && styles.gapPressed,
+            ]}
           >
-            <View style={styles.rangeColumn}>
-              <RangeLabel range={item.clippedRange} timezone={timezone} />
-            </View>
-            <View style={styles.markerColumn}>
-              <View
-                style={[
-                  styles.dot,
-                  isCurrent ? styles.dotCurrent : styles.dotUnresolved,
-                ]}
-              />
-            </View>
-            <View style={styles.bodyColumn}>
-              <AppText
-                variant="body"
-                color={isCurrent ? palette.inkSoft : palette.attention}
-              >
-                {isCurrent ? 'In progress' : 'Unresolved'}
-              </AppText>
-              <AppText variant="secondary">
-                {isCurrent
-                  ? 'Log now to record this span'
-                  : 'Tap to record what you did'}
-              </AppText>
-            </View>
-            <AppText variant="numericSmall" color={palette.muted}>
-              {formatDurationLabel(item.clippedRange.endAt - item.clippedRange.startAt)}
+            <AppText variant="numericSmall" color={palette.attention}>
+              {rangeLabel(item.clippedRange, timezone)}
             </AppText>
+            <View style={styles.question}>
+              <AppText variant="bodyStrong" color={palette.attention}>
+                ?
+              </AppText>
+            </View>
+            <View style={styles.body}>
+              <AppText variant="bodyStrong" color={palette.attention}>
+                What were you doing?
+              </AppText>
+              <AppText variant="capsAttention">fill in →</AppText>
+            </View>
           </Pressable>
         );
       })}
@@ -138,41 +153,28 @@ export function TimelineList({
 }
 
 const styles = StyleSheet.create({
-  list: {
-    borderRadius: radii.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: palette.rule,
-    backgroundColor: palette.surface,
-    overflow: 'hidden',
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 56,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: palette.rule,
-    gap: spacing.md,
+  },
+  rowLast: {
+    borderBottomWidth: 0,
   },
   pressed: {
-    backgroundColor: palette.surfaceMuted,
+    opacity: 0.7,
   },
-  rangeColumn: {
-    width: 92,
-  },
-  markerColumn: {
-    width: 12,
-    alignItems: 'center',
-  },
-  bodyColumn: {
-    flex: 1,
-    gap: 2,
+  range: {
+    width: 96,
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   dotRecorded: {
     backgroundColor: palette.accent,
@@ -180,12 +182,41 @@ const styles = StyleSheet.create({
   dotSkipped: {
     backgroundColor: palette.ruleStrong,
   },
-  dotUnresolved: {
-    backgroundColor: palette.attention,
-  },
   dotCurrent: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     borderWidth: 2,
     borderColor: palette.accent,
     backgroundColor: 'transparent',
+  },
+  body: {
+    flex: 1,
+    gap: 2,
+  },
+  gapCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginVertical: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: palette.attention,
+    backgroundColor: palette.attentionSoft,
+  },
+  gapPressed: {
+    opacity: 0.85,
+  },
+  question: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: palette.attention,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

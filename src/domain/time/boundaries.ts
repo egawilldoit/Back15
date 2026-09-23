@@ -113,6 +113,35 @@ export function latestAllowedSessionEnd(session: BoundarySession, now: Millis): 
   return Math.min(now, session.reminderWindowEndAt);
 }
 
+export interface BoundaryStripWindow {
+  items: { n: number; at: Millis }[];
+  /** Number of boundaries already reached. */
+  completed: number;
+  /** Boundary index marked as the next/current one. */
+  current: number;
+}
+
+/**
+ * The window of planned boundaries a compact strip should show: the most
+ * recent completed ones plus the next planned ones, capped at `maxDots`.
+ */
+export function boundaryStripWindow(
+  session: BoundarySession,
+  now: Millis,
+  maxDots = 11,
+): BoundaryStripWindow | null {
+  const last = maxBoundaryIndex(session);
+  if (last < 1) return null;
+  const completed = Math.min(boundaryIndexAtOrBefore(session, now), last);
+  const from = Math.max(1, Math.min(completed - 6, last - maxDots + 1));
+  const to = Math.min(last, from + maxDots - 1);
+  const items: { n: number; at: Millis }[] = [];
+  for (let n = from; n <= to; n += 1) {
+    items.push({ n, at: plannedBoundaryAt(session, n) });
+  }
+  return { items, completed, current: Math.min(completed + 1, to) };
+}
+
 export type ClockAnomalyKind = 'backward' | 'forward';
 
 export interface ClockAnomaly {

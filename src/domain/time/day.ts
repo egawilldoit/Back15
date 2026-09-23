@@ -132,12 +132,17 @@ export function formatClockTimeWithSeconds(instant: Millis, timeZone: string): s
   )}:${String(parts.second).padStart(2, '0')}`;
 }
 
-export function formatLongDate(instant: Millis, timeZone: string): string {
-  return formatParts(instant, timeZone, {
-    weekday: 'long',
-    month: 'long',
+export function formatWeekday(instant: Millis, timeZone: string): string {
+  return formatParts(instant, timeZone, { weekday: 'long' });
+}
+
+export function formatFullDate(instant: Millis, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
     day: 'numeric',
-  });
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(instant));
 }
 
 export function formatDayKeyLabel(dayKey: DayKey, timeZone: string): string {
@@ -162,6 +167,17 @@ export function formatDurationLabel(ms: Millis): string {
   if (hours === 0) return `${minutes} min`;
   if (rest === 0) return `${hours} h`;
   return `${hours} h ${String(rest).padStart(2, '0')} min`;
+}
+
+/** Compact ledger value: 45m, 1h, 1h 05m. Rounds once, after summing. */
+export function formatCompactDurationLabel(ms: Millis): string {
+  const minutes = roundToDisplayMinutes(ms);
+  if (minutes <= 0) return '0m';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  if (rest === 0) return `${hours}h`;
+  return `${hours}h ${String(rest).padStart(2, '0')}m`;
 }
 
 export function formatRangeLabel(range: TimeRange, timeZone: string): string {
