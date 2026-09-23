@@ -59,6 +59,46 @@ describe('reminder reconciliation', () => {
     expect(await listReminderRequests(harness.db)).toHaveLength(48);
   });
 
+  it('cancels stale requests scheduled by an older payload version', async () => {
+    const started = await startSession(harness.deps, { timezone: 'UTC' });
+    if (!started.ok) throw new Error('start failed');
+    const sessionId = started.value.session.id;
+    const staleSameSession = reminders.addOrphan({
+      version: REMINDER_PAYLOAD_VERSION - 1,
+      sessionId,
+      dueAt: T + 15 * 60 * 1000,
+    });
+    const staleForeignSession = reminders.addOrphan({
+      version: REMINDER_PAYLOAD_VERSION - 1,
+      sessionId: 'session-from-a-previous-install',
+      dueAt: T + 30 * 60 * 1000,
+    });
+    const result = await reconcile(harness.deps);
+    expect(result.ok).toBe(true);
+    expect(reminders.pending.has(staleSameSession)).toBe(false);
+    expect(reminders.pending.has(staleForeignSession)).toBe(false);
+    expect(reminders.cancelled).toEqual(
+      expect.arrayContaining([staleSameSession, staleForeignSession]),
+    );
+    if (!result.ok) return;
+    // The current-format request for the same boundary is reused, not duplicated.
+    expect(result.value.reminder.scheduled).toBe(0);
+    expect(result.value.reminder.pendingCount).toBe(48);
+  });
+
+  it('cancels older payload versions even when no session is active', async () => {
+    const staleId = reminders.addOrphan({
+      version: REMINDER_PAYLOAD_VERSION - 1,
+      sessionId: 'session-from-a-previous-install',
+      dueAt: T + 30 * 60 * 1000,
+    });
+    const result = await reconcile(harness.deps);
+    expect(result.ok).toBe(true);
+    expect(reminders.pending.has(staleId)).toBe(false);
+    if (!result.ok) return;
+    expect(result.value.reminder.cancelled).toBe(1);
+  });
+
   it('cancels everything when permission is denied and reschedules when restored', async () => {
     await startSession(harness.deps, { timezone: 'UTC' });
     reminders.permission = 'denied';

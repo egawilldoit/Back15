@@ -6,6 +6,7 @@ import {
   effectiveEndMs,
   futureBoundaries,
   isExpired,
+  latestAllowedSessionEnd,
   latestCompletedBoundary,
   maxBoundaryIndex,
   nextPlannedBoundary,
@@ -90,6 +91,21 @@ describe('anchored boundaries', () => {
     expect(effectiveEndMs(session, START + 5 * 60 * 60 * 1000)).toBe(endedAt);
     expect(nextPlannedBoundary(session, START)).toBeNull();
     expect(futureBoundaries(session, START)).toEqual([]);
+  });
+});
+
+describe('latest allowed session end', () => {
+  it('never allows a future end while the window is open', () => {
+    const session = activeSession();
+    expect(latestAllowedSessionEnd(session, utc(2026, 9, 22, 10))).toBe(
+      utc(2026, 9, 22, 10),
+    );
+  });
+
+  it('caps at the reminder window once it has passed', () => {
+    const session = activeSession();
+    const late = START + 13 * 60 * 60 * 1000;
+    expect(latestAllowedSessionEnd(session, late)).toBe(START + REMINDER_WINDOW_MS);
   });
 });
 

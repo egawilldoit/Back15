@@ -105,6 +105,14 @@ export function isCutoffReached(session: BoundarySession, now: Millis): boolean 
   return now >= session.reminderWindowEndAt;
 }
 
+/**
+ * Latest instant a session may be stopped at: never in the future, never past
+ * the 12-hour reminder window.
+ */
+export function latestAllowedSessionEnd(session: BoundarySession, now: Millis): Millis {
+  return Math.min(now, session.reminderWindowEndAt);
+}
+
 export type ClockAnomalyKind = 'backward' | 'forward';
 
 export interface ClockAnomaly {

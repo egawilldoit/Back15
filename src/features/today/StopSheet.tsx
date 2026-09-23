@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '../../components/AppText';
 import { PrimaryButton, QuietButton, SecondaryButton } from '../../components/Buttons';
 import { Banner, Card } from '../../components/Layout';
-import { effectiveEndMs } from '../../domain/time/boundaries';
+import { effectiveEndMs, latestAllowedSessionEnd } from '../../domain/time/boundaries';
 import { formatClockTime, formatDurationLabel } from '../../domain/time/day';
 import type { Session } from '../../domain/tracking/types';
 import { listLiveEntriesForSession } from '../../storage/repositories/entries';
@@ -63,9 +63,10 @@ export function StopSheet() {
 
   const adjust = (delta: number) => {
     if (!session || endedAt === null) return;
+    const latestAllowed = latestAllowedSessionEnd(session, Date.now());
     const next = endedAt + delta * MINUTE;
     if (next < session.startedAt) return;
-    if (next > session.reminderWindowEndAt) return;
+    if (next > latestAllowed) return;
     setEndedAt(next);
     setError(null);
   };

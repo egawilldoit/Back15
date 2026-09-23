@@ -2,6 +2,7 @@ import {
   DEFAULT_INTERVAL_SECONDS,
   REMINDER_WINDOW_MS,
   isExpired,
+  latestAllowedSessionEnd,
 } from '../domain/time/boundaries';
 import type { Millis } from '../domain/time/types';
 import { TrackingError, fail, ok } from '../domain/tracking/errors';
@@ -119,7 +120,7 @@ export async function stopSession(
         );
         return;
       }
-      const cap = Math.min(now, session.reminderWindowEndAt);
+      const cap = latestAllowedSessionEnd(session, now);
       const endedAt = input.endedAt ?? cap;
       if (endedAt < session.startedAt) {
         outcome.failure = new TrackingError(
@@ -134,6 +135,14 @@ export async function stopSession(
           'INVALID_RANGE',
           'The session cannot end after its 12-hour reminder window.',
           { sessionId: session.id, reminderWindowEndAt: session.reminderWindowEndAt },
+        );
+        return;
+      }
+      if (endedAt > now) {
+        outcome.failure = new TrackingError(
+          'SESSION_END_IN_FUTURE',
+          'A session cannot end in the future.',
+          { sessionId: session.id, endedAt, now },
         );
         return;
       }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { REMINDER_WINDOW_MS } from '../domain/time/boundaries';
+import { REMINDER_PAYLOAD_VERSION } from '../reminders/types';
 import { utc } from '../../tests/support/fixtures';
 import { FakeReminderPort } from '../../tests/support/fakeReminders';
 import { createHarness } from '../../tests/support/harness';
@@ -175,6 +176,51 @@ describe('stopSession', () => {
     if (!stopped.ok) return;
     expect(stopped.value.session.endedAt).toBe(T + 60 * 60 * 1000);
     expect(stopped.value.finalUnresolvedMs).toBe(45 * 60 * 1000);
+  });
+
+  it('rejects an end in the future and keeps the session active', async () => {
+    const started = await startSession(harness.deps, { timezone: 'UTC' });
+    if (!started.ok) throw new Error('start failed');
+    harness.setNow(T + 30 * 60 * 1000);
+    const stopped = await stopSession(harness.deps, {
+      sessionId: started.value.session.id,
+      endedAt: T + 60 * 60 * 1000,
+    });
+    expect(stopped.ok).toBe(false);
+    if (!stopped.ok) expect(stopped.error.code).toBe('SESSION_END_IN_FUTURE');
+    expect((await getSessionById(harness.db, started.value.session.id))?.status).toBe(
+      'active',
+    );
+    expect((await getSessionById(harness.db, started.value.session.id))?.endedAt).toBeNull();
+  });
+
+  it('accepts an end exactly at now', async () => {
+    const started = await startSession(harness.deps, { timezone: 'UTC' });
+    if (!started.ok) throw new Error('start failed');
+    harness.setNow(T + 30 * 60 * 1000);
+    const stopped = await stopSession(harness.deps, {
+      sessionId: started.value.session.id,
+      endedAt: T + 30 * 60 * 1000,
+    });
+    expect(stopped.ok).toBe(true);
+    if (!stopped.ok) return;
+    expect(stopped.value.session.endedAt).toBe(T + 30 * 60 * 1000);
+  });
+
+  it('cancels reminders left by an older payload version when stopped', async () => {
+    const started = await startSession(harness.deps, { timezone: 'UTC' });
+    if (!started.ok) throw new Error('start failed');
+    const staleId = reminders.addOrphan({
+      version: REMINDER_PAYLOAD_VERSION - 1,
+      sessionId: started.value.session.id,
+      dueAt: T + 15 * 60 * 1000,
+    });
+    const stopped = await stopSession(harness.deps, {
+      sessionId: started.value.session.id,
+    });
+    expect(stopped.ok).toBe(true);
+    expect(reminders.pending.has(staleId)).toBe(false);
+    expect(reminders.cancelled).toContain(staleId);
   });
 
   it('rejects an end past the reminder window', async () => {

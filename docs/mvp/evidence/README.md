@@ -10,7 +10,7 @@ A gate is only `PASS` with the recorded observation below; `BLOCKED` and
 | W1 domain time engine tests | **PASS** (135 assertions across 6 domain files) | `pnpm run test` |
 | W2 storage/use-case integration tests | **PASS** | `pnpm run test` |
 | W3–W5 offline Today / capture / stop / history / edit / settings | Implemented; typecheck and Android JS bundle pass. Runtime UI not exercised on a device → device part **BLOCKED** | [w6-verification.md](w6-verification.md) |
-| W6 automated gates + CI | Typecheck + 125 tests pass locally; CI updated | [w6-verification.md](w6-verification.md) |
+| W6 automated gates + CI | Typecheck + 132 tests pass locally; CI updated | [w6-verification.md](w6-verification.md) |
 | W6 installable standalone APK on the phone | **BLOCKED** | [w6-verification.md](w6-verification.md) |
 | W6 physical-device E2E script | **BLOCKED** | [w6-verification.md](w6-verification.md) |
 | W7 two working days of reminder observations + three-day trial | **PENDING OBSERVATION** | [w7-observations.md](w7-observations.md) |

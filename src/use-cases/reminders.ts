@@ -94,9 +94,13 @@ export async function reconcileReminders(
 
   for (const reminder of pending) {
     const payload = reminder.payload;
-    if (payload.version !== REMINDER_PAYLOAD_VERSION) continue;
+    // Requests from any older payload version cannot be trusted to match the
+    // current desired set: cancel them so a stale reminder can never survive an
+    // app update, a Stop or a downgrade, and reschedule from current truth.
+    const isCurrentFormat = payload.version === REMINDER_PAYLOAD_VERSION;
     const key = keyOf(payload.sessionId, payload.dueAt);
     const keep =
+      isCurrentFormat &&
       desiredKeys.has(key) &&
       payload.dueAt > input.now &&
       !seen.has(key);

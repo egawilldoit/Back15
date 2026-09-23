@@ -17,7 +17,7 @@ V0.1 software is implemented on branch `mvp/v0.1-implementation`:
   History with day detail, entry edit/delete, Settings;
 - local notification scheduling bounded to the active session's 12-hour window,
   with reconciliation and cold-start tap handling;
-- 125 deterministic tests over the time, storage, use-case and reminder
+- 132 deterministic tests over the time, storage, use-case and reminder
   contract layers.
 
 **Still outstanding, and not claimed:** the installed APK and the physical-device

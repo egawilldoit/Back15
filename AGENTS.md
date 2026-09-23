@@ -1,6 +1,16 @@
 # Back15 agent guide
 
-This repository is the Expo/React Native foundation for Back15 V0.1, a personal, offline, 15-minute activity journal. The screens are currently starter UI; tracking, SQLite persistence, reminders, and editing are **not yet implemented**. Build those features without presenting mock entries as real user data.
+This repository is the Expo/React Native implementation of Back15 V0.1, a personal, offline, 15-minute activity journal. The app is **implemented** on `mvp/v0.1-implementation` (PR #1): the pure time engine, versioned SQLite storage, transactional use cases, the offline Today/capture/Stop loop, History/day detail, edit/delete, Settings, and bounded local reminder scheduling with reconciliation all exist behind the contracts in the documents below. Never present mock entries or hardcoded example totals as real user data.
+
+## Current status and outstanding gates
+
+Software work is done and CI runs `pnpm run typecheck` plus `pnpm run test` (domain, storage, use-case, reminder-contract and journey tests). The Android release gate is **BLOCKED / PENDING**, not passed:
+
+1. **Installed standalone APK** — not yet built or installed (no build host, Android SDK, EAS credentials, or target phone was available during implementation).
+2. **Physical-device E2E** — the [device script](docs/mvp/e2e-spec.md#83-physical-device-e2e-script) has not run on the Samsung. Notification scheduling, delivery lateness, locked/terminated taps, reboot and permission changes are unverified.
+3. **Multi-day observations** — two working days of reminder observations and the three-day personal trial are `PENDING OBSERVATION`.
+
+Do not describe notification behavior as verified, and do not call V0.1 ready to ship, on the strength of typecheck, tests, CI, or a JS bundle export. Record gate status in [docs/mvp/evidence](docs/mvp/evidence/README.md) as `PASS`, `FAIL`, `BLOCKED`, or `PENDING OBSERVATION` with evidence.
 
 ## Read before changing code
 
@@ -18,7 +28,7 @@ If documents appear to disagree, use the E2E spec for behavior and acceptance, t
 - Expo SDK 57, React Native, Expo Router, TypeScript strict mode, `expo-sqlite`, and `expo-notifications`.
 - **pnpm only**, pinned in `package.json`; commit `pnpm-lock.yaml`. Do not add `package-lock.json` or use npm install for project dependencies.
 - Set up: `pnpm install --frozen-lockfile`.
-- Validate code: `pnpm run typecheck`.
+- Validate code: `pnpm run typecheck` and `pnpm run test` (Vitest; domain, storage, use-case, reminder-contract and journey tests).
 - Start: `pnpm start`. Verify native notification behavior on an installed development build and real phone; Expo Go is insufficient as the notification release gate.
 - On the ARM64 development VM, `pnpm exec expo export --platform android --no-bytecode` can check JS bundling. It does **not** verify Hermes or make a shippable Android build. Use a supported build host for release bundling.
 
