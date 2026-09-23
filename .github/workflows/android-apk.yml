@@ -110,30 +110,6 @@ jobs:
             --watched-directories-serialized "$(grep -h '^expo.inlineModules.watchedDirectories=' gradle.properties | cut -d= -f2-)"
           echo "mirror_exit=$?"
 
-      - name: Capture node invocations during the Gradle build
-        run: |
-          REAL_NODE="$(command -v node)"
-          SHIM_DIR="$RUNNER_TEMP/node-shim"
-          mkdir -p "$SHIM_DIR"
-          printf "%s\n" \
-            "#!/usr/bin/env bash" \
-            "err=\$(mktemp)" \
-            "printf \"%s\\n\" \"=== node call: pwd=\$PWD args: \$*\" >> /tmp/node-calls.log" \
-            "\"$REAL_NODE\" \"\$@\" 2>\"\$err\"" \
-            "status=\$?" \
-            "cat \"\$err\" >> /tmp/node-calls.log" \
-            "printf \"%s\\n\" \"=== exit \$status\" >> /tmp/node-calls.log" \
-            "if [ \$status -ne 0 ]; then" \
-            "  { echo \"=== node wrapper FAILED (\$status): \$*\"; cat \"\$err\"; } >&2" \
-            "fi" \
-            "rm -f \"\$err\"" \
-            "exit \$status" \
-            > "$SHIM_DIR/node"
-          chmod +x "$SHIM_DIR/node"
-          rm -f /tmp/node-calls.log
-          echo "shim written:"; cat "$SHIM_DIR/node"
-          echo "$SHIM_DIR" >> "$GITHUB_PATH"
-
       - name: Build release APK
         working-directory: android
         run: |
@@ -152,6 +128,7 @@ jobs:
           # Injection properties live in the generated (gitignored) android
           # project only; the keystore is a throwaway private-test key.
           {
+            echo ""
             echo "android.injected.signing.store.file=$KEYSTORE"
             echo "android.injected.signing.store.password=$KEYSTORE_PASSWORD"
             echo "android.injected.signing.key.alias=back15test"
@@ -159,16 +136,6 @@ jobs:
           } >> gradle.properties
           ./gradlew :app:assembleRelease --no-daemon --stacktrace --console=plain \
             -PreactNativeArchitectures="${ABI}"
-
-      - name: Node invocations captured during the build
-        if: always()
-        run: |
-          if [ -f /tmp/node-calls.log ]; then
-            echo "=== captured node calls (last 200 lines) ==="
-            tail -200 /tmp/node-calls.log
-          else
-            echo "no node calls captured"
-          fi
 
       - name: Verify APK and record evidence
         run: |
