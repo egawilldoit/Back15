@@ -61,6 +61,7 @@ export function CaptureSheet() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<TimeRange | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -167,8 +168,10 @@ export function CaptureSheet() {
     setBusy(false);
     if (!result.ok) {
       setError(result.error.message);
+      setConflict((result.error.details.conflictingRange as TimeRange) ?? null);
       return;
     }
+    setConflict(null);
     setSavedMessage(
       `${formatDurationLabel(liveRange.endAt - liveRange.startAt)} recorded.`,
     );
@@ -300,6 +303,12 @@ export function CaptureSheet() {
       {error ? (
         <Banner tone="attention" title="Not saved">
           <AppText variant="secondary">{error}</AppText>
+          {conflict ? (
+            <AppText variant="secondary">
+              Conflicting entry: {formatClockTime(conflict.startAt, timezone)}–
+              {formatClockTime(conflict.endAt, timezone)}.
+            </AppText>
+          ) : null}
         </Banner>
       ) : null}
 

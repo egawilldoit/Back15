@@ -40,6 +40,7 @@ export function TodayScreen() {
     revision,
     refresh,
     reminderStatus,
+    clockAnomaly,
     reconcileNow,
     requestReminderPermission,
   } = useApp();
@@ -273,6 +274,19 @@ export function TodayScreen() {
           />
         </Card>
       )}
+
+      {active && clockAnomaly ? (
+        <Banner tone="attention" title="Device clock changed">
+          <AppText variant="secondary">
+            Automatic elapsed-time inference is paused. Review the session end before
+            trusting these totals; existing entries were not changed.
+          </AppText>
+          <SecondaryButton
+            label="Review session end"
+            onPress={() => router.push('/stop')}
+          />
+        </Banner>
+      ) : null}
 
       {remindersUnavailable ? (
         <Banner tone="attention" title="Tracking without reminders">

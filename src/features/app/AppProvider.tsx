@@ -13,6 +13,7 @@ import {
 import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
 import { AppText } from '../../components/AppText';
 import { PrimaryButton } from '../../components/Buttons';
+import type { ClockAnomaly } from '../../domain/time/boundaries';
 import { currentTimeZone, localDayKey } from '../../domain/time/day';
 import { checkInTarget, logNowTarget } from '../../domain/tracking/proposals';
 import { parseReminderPayload } from '../../reminders/types';
@@ -44,6 +45,7 @@ export interface AppContextValue {
   ready: boolean;
   storageError: string | null;
   reminderStatus: ReminderStatus | null;
+  clockAnomaly: ClockAnomaly | null;
   refresh(): void;
   retryStorage(): void;
   reconcileNow(): Promise<ReminderStatus | null>;
@@ -67,6 +69,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [attempt, setAttempt] = useState(0);
   const [revision, setRevision] = useState(0);
   const [reminderStatus, setReminderStatus] = useState<ReminderStatus | null>(null);
+  const [clockAnomaly, setClockAnomaly] = useState<ClockAnomaly | null>(null);
   const sheetCount = useRef(0);
   const reminders = useMemo(() => createExpoReminderPort(), []);
   const [timezone, setTimezone] = useState(() => currentTimeZone());
@@ -135,6 +138,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }));
       return null;
     }
+    setClockAnomaly(result.value.clockAnomaly);
     const status: ReminderStatus = {
       permission: result.value.reminder.permission,
       remindersEnabled: result.value.reminder.remindersEnabled,
@@ -226,6 +230,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ready: true,
       storageError,
       reminderStatus,
+      clockAnomaly,
       refresh,
       retryStorage: () => setAttempt((current) => current + 1),
       reconcileNow,
@@ -238,6 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     revision,
     storageError,
     reminderStatus,
+    clockAnomaly,
     refresh,
     reconcileNow,
     setSheetOpen,

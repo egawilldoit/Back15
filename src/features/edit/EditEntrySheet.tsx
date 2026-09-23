@@ -16,7 +16,7 @@ import { DangerButton, PrimaryButton, QuietButton } from '../../components/Butto
 import { Banner, Card, SectionTitle } from '../../components/Layout';
 import { effectiveEndMs } from '../../domain/time/boundaries';
 import { formatClockTime, formatDurationLabel } from '../../domain/time/day';
-import type { Millis } from '../../domain/time/types';
+import type { Millis, TimeRange } from '../../domain/time/types';
 import type { Category, Entry, EntryKind, Session } from '../../domain/tracking/types';
 import { CATEGORIES, CATEGORY_LABELS } from '../../domain/tracking/types';
 import { MAX_DESCRIPTION_LENGTH } from '../../domain/tracking/validation';
@@ -44,6 +44,7 @@ export function EditEntrySheet() {
   const [startAt, setStartAt] = useState<Millis>(0);
   const [endAt, setEndAt] = useState<Millis>(0);
   const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<TimeRange | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -107,11 +108,13 @@ export function EditEntrySheet() {
     setBusy(false);
     if (!result.ok) {
       setError(result.error.message);
+      setConflict((result.error.details.conflictingRange as TimeRange) ?? null);
       if (result.error.code === 'REVISION_CONFLICT') {
         await load();
       }
       return;
     }
+    setConflict(null);
     setSavedMessage('Changes saved.');
     refresh();
     setTimeout(() => router.back(), 500);
@@ -195,6 +198,12 @@ export function EditEntrySheet() {
         {error ? (
           <Banner tone="attention" title="Not saved">
             <AppText variant="secondary">{error}</AppText>
+            {conflict ? (
+              <AppText variant="secondary">
+                Conflicting entry: {formatClockTime(conflict.startAt, timezone)}–
+                {formatClockTime(conflict.endAt, timezone)}.
+              </AppText>
+            ) : null}
           </Banner>
         ) : null}
 
