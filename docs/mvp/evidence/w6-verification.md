@@ -40,6 +40,26 @@
 | Stop future guard | `stopSession` rejects an end after `now` (`SESSION_END_IN_FUTURE`) and accepts an end exactly at `now` |
 | Stale payload versions | reconciliation cancels pending requests from older payload versions, for the active session, a foreign session, and with no session at all; Stop also cancels older-version requests for its session |
 
+## Private-test APK builds (layout and notification checks)
+
+The `Android APK` workflow builds a standalone `arm64-v8a` test APK signed with
+the durable private-test keystore held in repository secrets (see
+[test-signing.md](../test-signing.md)). It is not a release artifact and it does
+not pass the release gate.
+
+| Build | Commit | Package id | Signing cert SHA-256 | APK SHA-256 | Size |
+| --- | --- | --- | --- | --- | --- |
+| run 35903200493 | `222394d001f4` | `com.egawilldoit.back15.test` | `d3523429e41d9b8789459d3670dfc41a98df23d8c3e49554cf2e6dab8b508be1` | `85ec5815b0e11b9226bb145efdf50256719bca1d69453ada027e2596e6734b2d` | 44,034,643 B |
+
+- The test build uses its own application id so it installs **alongside** any
+  existing Back15 signed with a different key. It cannot read or migrate the
+  existing installation's SQLite data.
+- The earlier throwaway-signed test APK (`com.egawilldoit.back15`,
+  `9f09994`) cannot be updated in place by the new key; only the side-by-side
+  test package can be installed.
+- Two consecutive builds must report the same certificate fingerprint; the
+  second build is recorded in the PR.
+
 ## APK: BLOCKED
 
 `eas.json` and a release build were not produced because:
