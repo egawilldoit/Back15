@@ -12,6 +12,7 @@
 | W2 commit | `bf1477d` — SQLite storage + transactional use cases + integration tests |
 | W3–W5 commit | `7dddac5` — Today/capture/stop/history/edit/settings + Expo reminder adapter |
 | Verification commit | this documentation and CI change |
+| Candidate SHA at handoff | `84b3bb49716c34919b65e0844d33dbfd1020f35c` (head of `mvp/v0.1-implementation`; see the PR for the latest) |
 | Lockfile | `pnpm-lock.yaml` only; no `package-lock.json` |
 
 ## Automated results (this environment, 2026-09-23)
