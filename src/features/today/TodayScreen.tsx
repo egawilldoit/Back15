@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '../../components/AppText';
 import { PrimaryButton, QuietButton, SecondaryButton } from '../../components/Buttons';
@@ -67,6 +67,18 @@ export function TodayScreen() {
 
   const active = model?.activeSession ?? null;
   const tickNow = useTickMs(Boolean(active));
+  const cutoffHandled = useRef(false);
+
+  useEffect(() => {
+    if (!active) {
+      cutoffHandled.current = false;
+      return;
+    }
+    if (tickNow >= active.reminderWindowEndAt && !cutoffHandled.current) {
+      cutoffHandled.current = true;
+      void reconcileNow();
+    }
+  }, [active, reconcileNow, tickNow]);
 
   const handleStart = useCallback(async () => {
     setStarting(true);
