@@ -136,6 +136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pendingCount: current?.pendingCount ?? 0,
         error: result.error.message,
       }));
+      refresh();
       return null;
     }
     setClockAnomaly(result.value.clockAnomaly);

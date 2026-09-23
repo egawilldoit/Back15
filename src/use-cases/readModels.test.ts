@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { utc } from '../../tests/support/fixtures';
 import { createHarness } from '../../tests/support/harness';
 import type { Harness } from '../../tests/support/harness';
+import { plannedBoundaryAt } from '../domain/time/boundaries';
+import { getSessionById } from '../storage/repositories/sessions';
 import { createEntry, skipRange } from './entries';
 import { getDayDetail, getHistory, getToday } from './readModels';
 import { startSession, stopSession } from './sessions';
@@ -67,6 +69,107 @@ describe('today read model', () => {
       endAt: T + 50 * MIN,
     });
     expect(value.remindersEnabled).toBe(true);
+  });
+
+  it('recomputes at a boundary without moving the planned schedule', async () => {
+    const started = await startSession(harness.deps, { timezone: 'UTC' });
+    if (!started.ok) throw new Error('start failed');
+    const sessionId = started.value.session.id;
+    const before = await getToday(harness.deps, { timezone: 'UTC' });
+    if (!before.ok) throw new Error('read failed');
+    expect(before.value.nextBoundaryAt).toBe(T + 15 * MIN);
+    expect(before.value.checkInTarget).toBeNull();
+
+    harness.setNow(T + 20 * MIN);
+    const after = await getToday(harness.deps, { timezone: 'UTC' });
+    if (!after.ok) throw new Error('read failed');
+    expect(after.value.nextBoundaryAt).toBe(T + 30 * MIN);
+    expect(after.value.checkInTarget?.range).toEqual({
+      startAt: T,
+      endAt: T + 15 * MIN,
+    });
+    expect(after.value.logNowTarget?.range).toEqual({
+      startAt: T + 15 * MIN,
+      endAt: T + 20 * MIN,
+    });
+    expect(after.value.summary.unresolvedMs).toBe(20 * MIN);
+    expect(after.value.summary.completedUnresolvedMs).toBe(15 * MIN);
+
+    const stored = await getSessionById(harness.db, sessionId);
+    expect(stored?.startedAt).toBe(T);
+    expect(stored?.reminderWindowEndAt).toBe(T + 12 * 60 * MIN);
+    expect(plannedBoundaryAt(stored!, 1)).toBe(T + 15 * MIN);
+    expect(plannedBoundaryAt(stored!, 2)).toBe(T + 30 * MIN);
+  });
+
+  it('switches to the new local day across midnight', async () => {
+    const start = utc(2026, 9, 22, 23, 50);
+    harness.setNow(start);
+    const started = await startSession(harness.deps, { timezone: 'UTC' });
+    if (!started.ok) throw new Error('start failed');
+    harness.setNow(utc(2026, 9, 22, 23, 55));
+    const entry = await createEntry(harness.deps, {
+      sessionId: started.value.session.id,
+      range: { startAt: start, endAt: utc(2026, 9, 22, 23, 55) },
+      description: 'Late task',
+      actionId: 'action-1',
+    });
+    expect(entry.ok).toBe(true);
+
+    harness.setNow(utc(2026, 9, 23, 0, 10));
+    const today = await getToday(harness.deps, { timezone: 'UTC' });
+    if (!today.ok) throw new Error('read failed');
+    expect(today.value.dayKey).toBe('2026-09-23');
+    expect(today.value.summary.elapsedMs).toBe(10 * MIN);
+    expect(today.value.summary.recordedMs).toBe(0);
+    expect(today.value.summary.unresolvedMs).toBe(10 * MIN);
+    expect(today.value.nextBoundaryAt).toBe(utc(2026, 9, 23, 0, 20));
+
+    const yesterday = await getDayDetail(harness.deps, {
+      dayKey: '2026-09-22',
+      timezone: 'UTC',
+    });
+    if (!yesterday.ok) throw new Error('detail failed');
+    expect(yesterday.value.summary.elapsedMs).toBe(10 * MIN);
+    expect(yesterday.value.summary.recordedMs).toBe(5 * MIN);
+    expect(yesterday.value.summary.unresolvedMs).toBe(5 * MIN);
+  });
+
+  it('collapses two missed boundaries into one gap after resume', async () => {
+    const started = await startSession(harness.deps, { timezone: 'UTC' });
+    if (!started.ok) throw new Error('start failed');
+    const sessionId = started.value.session.id;
+
+    harness.setNow(T + 40 * MIN);
+    const resumed = await getToday(harness.deps, { timezone: 'UTC' });
+    if (!resumed.ok) throw new Error('read failed');
+    expect(resumed.value.checkInTarget?.range).toEqual({
+      startAt: T,
+      endAt: T + 30 * MIN,
+    });
+    expect(resumed.value.checkInTarget?.olderGaps).toEqual([]);
+    expect(resumed.value.logNowTarget?.range).toEqual({
+      startAt: T + 30 * MIN,
+      endAt: T + 40 * MIN,
+    });
+
+    const saved = await createEntry(harness.deps, {
+      sessionId,
+      range: resumed.value.checkInTarget!.range,
+      description: 'Recorded after resume',
+      origin: 'backfilled',
+      actionId: 'action-1',
+    });
+    expect(saved.ok).toBe(true);
+    const after = await getToday(harness.deps, { timezone: 'UTC' });
+    if (!after.ok) throw new Error('read failed');
+    expect(after.value.summary.recordedMs).toBe(30 * MIN);
+    expect(after.value.summary.unresolvedMs).toBe(10 * MIN);
+    expect(after.value.checkInTarget).toBeNull();
+    const live = await import('../storage/repositories/entries').then((mod) =>
+      mod.listLiveEntriesForSession(harness.db, sessionId),
+    );
+    expect(live).toHaveLength(1);
   });
 
   it('keeps the balance after an edit and a delete', async () => {

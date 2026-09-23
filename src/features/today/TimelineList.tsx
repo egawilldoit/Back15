@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '../../components/AppText';
 import { formatClockTime, formatDurationLabel } from '../../domain/time/day';
@@ -22,7 +23,7 @@ function rangeLabel(range: TimeRange, timezone: string): string {
   )}`;
 }
 
-export function TimelineList({
+export const TimelineList = memo(function TimelineList({
   items,
   timezone,
   onPressEntry,
@@ -150,7 +151,7 @@ export function TimelineList({
       })}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {

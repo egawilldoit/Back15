@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AppText } from '../../components/AppText';
 import { formatCompactDurationLabel } from '../../domain/time/day';
@@ -35,7 +36,7 @@ function Column({
  * Editorial ledger of honest totals. Totals are rounded once, after summing
  * (the caller passes exact milliseconds).
  */
-export function TotalLedger({
+export const TotalLedger = memo(function TotalLedger({
   elapsedMs,
   recordedMs,
   skippedMs,
@@ -56,7 +57,7 @@ export function TotalLedger({
       <Column label="Session" value={formatCompactDurationLabel(elapsedMs)} />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   ledger: {

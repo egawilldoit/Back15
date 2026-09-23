@@ -1,15 +1,14 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '../../components/AppText';
 import { QuietButton } from '../../components/Buttons';
 import { Banner, Screen } from '../../components/Layout';
 import {
   boundaryIndexAtOrBefore,
-  latestCompletedBoundary,
+  todayRefreshTargets,
 } from '../../domain/time/boundaries';
 import {
-  formatClockTime,
   formatDurationLabel,
   formatFullDate,
   formatWeekday,
@@ -22,26 +21,11 @@ import type { TodayReadModel } from '../../use-cases/readModels';
 import { startSession } from '../../use-cases/sessions';
 import { palette, radii, spacing, typography } from '../../theme';
 import { useApp } from '../app/AppProvider';
+import { ActiveSessionCard } from './ActiveSessionCard';
 import { BoundaryStrip } from './BoundaryStrip';
-import { IntervalDial } from './IntervalDial';
 import { TimelineList } from './TimelineList';
 import type { UnresolvedItem } from './TimelineList';
 import { TotalLedger } from './TotalLedger';
-
-function useTickMs(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [active]);
-  return now;
-}
-
-function minutesUntil(target: number, now: number): number {
-  return Math.max(0, Math.round((target - now) / 60_000));
-}
 
 export function TodayScreen() {
   const router = useRouter();
@@ -77,19 +61,26 @@ export function TodayScreen() {
   }, [deps, timezone, revision]);
 
   const active = model?.activeSession ?? null;
-  const tickNow = useTickMs(Boolean(active));
-  const cutoffHandled = useRef(false);
 
+  /**
+   * Recompute from SQLite at each planned boundary, at local midnight and at
+   * the 12-hour cutoff. The timer only triggers a re-read; every value is
+   * derived from Date.now() and the stored session, so waking late (or after
+   * several boundaries) still produces one accurate state.
+   */
   useEffect(() => {
-    if (!active) {
-      cutoffHandled.current = false;
-      return;
-    }
-    if (tickNow >= active.reminderWindowEndAt && !cutoffHandled.current) {
-      cutoffHandled.current = true;
-      void reconcileNow();
-    }
-  }, [active, reconcileNow, tickNow]);
+    if (!model) return;
+    const targets = todayRefreshTargets(model.activeSession, Date.now(), timezone);
+    const delay = Math.max(500, targets.nextRefreshAt - Date.now());
+    const timer = setTimeout(() => {
+      if (targets.cutoffAt !== null && Date.now() >= targets.cutoffAt) {
+        void reconcileNow();
+      } else {
+        refresh();
+      }
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [model, reconcileNow, refresh, timezone]);
 
   const handleStart = useCallback(async () => {
     setStarting(true);
@@ -204,18 +195,8 @@ export function TodayScreen() {
     (active !== null && permission === 'undetermined');
   const zoneChanged = active && active.startTimezone !== timezone;
   const checkIn = model.checkInTarget;
-  const intervalMs = active ? active.intervalSeconds * 1000 : 0;
-  const intervalStart = active
-    ? (latestCompletedBoundary(active, tickNow) ?? active.startedAt)
-    : 0;
-  const intervalEnd = active
-    ? Math.min(intervalStart + intervalMs, active.reminderWindowEndAt)
-    : 0;
-  const elapsedMinutes = active
-    ? Math.max(0, Math.min(15, Math.floor((tickNow - intervalStart) / 60_000)))
-    : 0;
   const completedBoundaries = active
-    ? boundaryIndexAtOrBefore(active, tickNow)
+    ? boundaryIndexAtOrBefore(active, model.now)
     : 0;
 
   return (
@@ -238,72 +219,20 @@ export function TodayScreen() {
       {active ? (
         <>
           <View style={styles.stripSection}>
-            <BoundaryStrip session={active} now={tickNow} timezone={timezone} />
+            <BoundaryStrip session={active} now={model.now} timezone={timezone} />
           </View>
-          <View style={styles.activeCard}>
-            <AppText variant="capsOnAccent">
-              tracking since {formatClockTime(active.startedAt, timezone)}
-            </AppText>
-            <AppText variant="editorial" color={palette.onAccent}>
-              {formatClockTime(intervalStart, timezone)} –{' '}
-              {formatClockTime(intervalEnd, timezone)}
-            </AppText>
-            <View style={styles.activeMain}>
-              <View style={styles.activeLeft}>
-                {model.nextBoundaryAt ? (
-                  <>
-                    <View style={styles.countdownRow}>
-                      <AppText style={styles.countdownNumber}>
-                        {minutesUntil(model.nextBoundaryAt, tickNow)}
-                      </AppText>
-                      <AppText variant="editorialSmall" color={palette.onAccent}>
-                        min
-                      </AppText>
-                    </View>
-                    <AppText variant="capsOnAccent">until next check-in</AppText>
-                    <AppText variant="capsOnAccent">
-                      ends at {formatClockTime(intervalEnd, timezone)}
-                    </AppText>
-                  </>
-                ) : (
-                  <AppText variant="capsOnAccent">no more planned check-ins</AppText>
-                )}
-              </View>
-              <IntervalDial elapsed={elapsedMinutes} total={15} />
-            </View>
-            <View style={styles.cardActions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Log now"
-                accessibilityHint="Record the current unfinished span"
-                onPress={() =>
-                  router.push({
-                    pathname: '/capture',
-                    params: { sessionId: active.id, mode: 'lognow' },
-                  })
-                }
-                style={({ pressed }) => [styles.logNow, pressed && styles.actionPressed]}
-              >
-                <AppText variant="bodyStrong" color={palette.onAccent}>
-                  Log now →
-                </AppText>
-              </Pressable>
-              <View style={styles.actionDivider} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Stop tracking"
-                onPress={() => router.push('/stop')}
-                style={({ pressed }) => [styles.stopButton, pressed && styles.actionPressed]}
-              >
-                <AppText variant="bodyStrong" color={palette.onAccent}>
-                  Stop
-                </AppText>
-              </Pressable>
-            </View>
-            <AppText variant="capsOnAccent">
-              reminder end {formatClockTime(active.reminderWindowEndAt, timezone)}
-            </AppText>
-          </View>
+          <ActiveSessionCard
+            session={active}
+            nextBoundaryAt={model.nextBoundaryAt}
+            timezone={timezone}
+            onLogNow={() =>
+              router.push({
+                pathname: '/capture',
+                params: { sessionId: active.id, mode: 'lognow' },
+              })
+            }
+            onStop={() => router.push('/stop')}
+          />
         </>
       ) : (
         <View style={styles.section}>
@@ -453,61 +382,6 @@ const styles = StyleSheet.create({
   stripSection: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
-  },
-  activeCard: {
-    backgroundColor: palette.accent,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
-    gap: spacing.md,
-  },
-  activeMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  activeLeft: {
-    flex: 1,
-    gap: spacing.xs,
-    justifyContent: 'center',
-  },
-  countdownRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-  },
-  countdownNumber: {
-    ...typography.display,
-    fontSize: 46,
-    lineHeight: 50,
-    color: palette.onAccent,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  logNow: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: radii.pill,
-    backgroundColor: palette.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  actionDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  stopButton: {
-    minHeight: 52,
-    minWidth: 72,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
   },
   actionPressed: {
     opacity: 0.85,

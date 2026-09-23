@@ -1,3 +1,4 @@
+import { addDaysToDayKey, localDayKey, localDayWindow } from './day';
 import { MINUTE_MS, durationMs } from './interval';
 import type { Millis, TimeRange } from './types';
 
@@ -140,6 +141,45 @@ export function boundaryStripWindow(
     items.push({ n, at: plannedBoundaryAt(session, n) });
   }
   return { items, completed, current: Math.min(completed + 1, to) };
+}
+
+export interface TodayRefreshTargets {
+  nextBoundaryAt: Millis | null;
+  nextMidnightAt: Millis;
+  cutoffAt: Millis | null;
+  nextRefreshAt: Millis;
+}
+
+/**
+ * Instants at which an open Today screen must recompute from SQLite: the next
+ * planned boundary, the next local midnight, or the session's 12-hour cutoff.
+ * A screen that wakes late still recomputes from Date.now(), so several missed
+ * boundaries collapse into one accurate read.
+ */
+export function todayRefreshTargets(
+  session: BoundarySession | null,
+  now: Millis,
+  timeZone: string,
+): TodayRefreshTargets {
+  const isActive = session !== null && session.status === 'active';
+  const nextBoundaryAt = isActive ? nextPlannedBoundary(session, now) : null;
+  const cutoffAt = isActive ? session.reminderWindowEndAt : null;
+  const nextMidnightAt = localDayWindow(
+    addDaysToDayKey(localDayKey(now, timeZone), 1),
+    timeZone,
+  ).startAt;
+  if (cutoffAt !== null && now >= cutoffAt) {
+    return { nextBoundaryAt, nextMidnightAt, cutoffAt, nextRefreshAt: now };
+  }
+  const candidates: Millis[] = [nextMidnightAt];
+  if (nextBoundaryAt !== null && nextBoundaryAt > now) candidates.push(nextBoundaryAt);
+  if (cutoffAt !== null && cutoffAt > now) candidates.push(cutoffAt);
+  return {
+    nextBoundaryAt,
+    nextMidnightAt,
+    cutoffAt,
+    nextRefreshAt: Math.min(...candidates),
+  };
 }
 
 export type ClockAnomalyKind = 'backward' | 'forward';

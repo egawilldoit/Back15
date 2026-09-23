@@ -3,6 +3,7 @@ import { makeSession, utc } from '../../../tests/support/fixtures';
 import {
   boundaryStripWindow,
   currentPartialInterval,
+  todayRefreshTargets,
   detectClockAnomaly,
   effectiveEndMs,
   futureBoundaries,
@@ -127,6 +128,50 @@ describe('boundary strip window', () => {
     const window = boundaryStripWindow(session, START + 60_000);
     expect(window!.items.length).toBeGreaterThan(0);
     expect(boundaryStripWindow(makeSession({ startedAt: START, intervalSeconds: 13 * 60 * 60 }), START + 60_000)).toBeNull();
+  });
+});
+
+describe('today refresh targets', () => {
+  it('wakes at the next planned boundary', () => {
+    const session = activeSession();
+    const targets = todayRefreshTargets(session, utc(2026, 9, 22, 10, 28), 'UTC');
+    expect(targets.nextBoundaryAt).toBe(utc(2026, 9, 22, 10, 33, 20));
+    expect(targets.nextRefreshAt).toBe(utc(2026, 9, 22, 10, 33, 20));
+  });
+
+  it('wakes at local midnight when it comes first', () => {
+    const session = makeSession({ startedAt: utc(2026, 9, 22, 15) });
+    const targets = todayRefreshTargets(session, utc(2026, 9, 22, 23, 59), 'UTC');
+    expect(targets.nextMidnightAt).toBe(utc(2026, 9, 23));
+    expect(targets.nextRefreshAt).toBe(utc(2026, 9, 23));
+  });
+
+  it('wakes at the cutoff for an active session', () => {
+    const session = activeSession();
+    const nearCutoff = START + REMINDER_WINDOW_MS - 60_000;
+    const targets = todayRefreshTargets(session, nearCutoff, 'UTC');
+    expect(targets.cutoffAt).toBe(START + REMINDER_WINDOW_MS);
+    expect(targets.nextRefreshAt).toBe(START + REMINDER_WINDOW_MS);
+  });
+
+  it('asks for an immediate recompute once the cutoff has passed', () => {
+    const session = activeSession();
+    const targets = todayRefreshTargets(session, START + REMINDER_WINDOW_MS + 1000, 'UTC');
+    expect(targets.nextRefreshAt).toBe(START + REMINDER_WINDOW_MS + 1000);
+  });
+
+  it('only watches midnight without an active session', () => {
+    const targets = todayRefreshTargets(null, utc(2026, 9, 22, 10, 28), 'UTC');
+    expect(targets.nextBoundaryAt).toBeNull();
+    expect(targets.cutoffAt).toBeNull();
+    expect(targets.nextRefreshAt).toBe(utc(2026, 9, 23));
+  });
+
+  it('does not use a closed session schedule', () => {
+    const session = makeSession({ startedAt: START, endedAt: START + 30 * 60 * 1000 });
+    const targets = todayRefreshTargets(session, utc(2026, 9, 22, 10, 28), 'UTC');
+    expect(targets.nextBoundaryAt).toBeNull();
+    expect(targets.nextRefreshAt).toBe(utc(2026, 9, 23));
   });
 });
 
